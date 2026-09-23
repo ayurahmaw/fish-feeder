@@ -1,0 +1,88 @@
+[
+    {
+        "id": "f52015e287887a80",
+        "type": "tab",
+        "label": "Recovered Nodes",
+        "disabled": false,
+        "info": "The nodes on this flow were missing a valid flow id when they were imported. They have been added to this flow so you can either restore or delete them.",
+        "env": []
+    },
+    {
+        "id": "sim_brk_01",
+        "type": "mqtt-broker",
+        "name": "local mosquitto",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "nodered-sim",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "feeder/sim/status",
+        "birthQos": "0",
+        "birthRetain": "true",
+        "birthPayload": "online",
+        "birthMsg": {},
+        "closeTopic": "feeder/sim/status",
+        "closeQos": "0",
+        "closeRetain": "true",
+        "closePayload": "offline",
+        "closeMsg": {},
+        "willTopic": "feeder/sim/status",
+        "willQos": "0",
+        "willRetain": "true",
+        "willPayload": "offline",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "sim_inj_01",
+        "type": "inject",
+        "z": "f52015e287887a80",
+        "name": "telemetry tick (ESP)",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "3",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "0.1",
+        "topic": "feeder/sim/telemetry",
+        "payload": "{\"level\":50,\"state\":\"idle\"}",
+        "payloadType": "json",
+        "x": 180,
+        "y": 160,
+        "wires": [
+            [
+                "sim_out_01"
+            ]
+        ]
+    },
+    {
+        "id": "sim_out_01",
+        "type": "mqtt out",
+        "z": "f52015e287887a80",
+        "name": "telemetry pub (MQTT)",
+        "topic": "feeder/sim/telemetry",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "sim_brk_01",
+        "x": 420,
+        "y": 160,
+        "wires": []
+    }
+]
