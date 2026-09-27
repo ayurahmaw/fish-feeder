@@ -1,72 +1,85 @@
 # fish-feeder
 
-ESP32 Aquaponic Autofeeder — MQTT-based communication layer and local prototype.
-
-This repo holds the protocol foundation phase of the project: a local MQTT broker
-(Mosquitto), a Node.js device simulator, and a Node-RED visual flow that together prove
-bidirectional publish/subscribe before the real ESP32 firmware is written.
+ESP32 Aquaponic Autofeeder — a local platform for the MQTT communication layer, storage
+and monitoring, running entirely in one Python process before the real ESP32 firmware exists.
 
 ## Architecture
 
 ```
 [ESP32 autofeeder] ──WiFi──┐
 [node-RED simulator] ─────┤
-[your platform/dashboard] ─┴──► Mosquitto Broker (:1883) ◄── Node-RED editor (:1880)
+[sim.js simulator] ───────┴──►  ┌──────────── dashboard/ (one Streamlit process) ───────────┐
+                                │  MQTT broker :1883  →  worker  →  SQLite  →  dashboard :8501 │
+                                └──────────────────────────────────────────────────────────────┘
 ```
 
-- **Mosquitto** — MQTT broker on `:1883` (local), handles device ↔ platform traffic
-- **`sim.js`** — Node.js simulator that mimics the ESP32: stable client id, command
-  subscription, periodic telemetry, feed-level tracking, manual-feed acks
-- **Node-RED** — visual flow editor / alternate simulator on `:1880` (flows in `flows.json`)
+- **`dashboard/`** — the whole platform: an embedded MQTT broker (`amqtt`), an MQTT worker that
+  ingests device traffic, alert evaluation, ack correlation, the timeout sweeper, an embedded
+  SQLite database, and the Streamlit monitoring/control UI.
+- **`sim.js`** — stands in for the ESP32: stable client id, birth/LWT, periodic telemetry,
+  feed-level tracking, manual-feed acks.
+- **`database/`** — SQLite schema + example queries.
+- **Node-RED** — alternative visual simulator (`flows.json`), connects to the same broker.
+
+There is **no external service**: no mosquitto, no MySQL. The broker and the database both run
+inside the app process. (If port 1883 is already taken by a mosquitto you have running, the app
+detects it and uses that broker instead.)
 
 ## MQTT topic tree (device namespace, `feeder01` = device ID)
 
 ```
 feeder/<device>/state       device → platform  full state snapshot (schedule, RTC, feed level)
 feeder/<device>/telemetry   device → platform  periodic status ticks
-feeder/<device>/status      LWT: online/offline
+feeder/<device>/status      LWT: online/offline (retained)
 feeder/<device>/command     platform → device  all commands (manual feed, set schedule, sync RTC)
 feeder/<device>/ack         device → platform  command acknowledgement
 ```
 
 Messages are JSON; every command carries a `command_id` so acks can be matched.
-Command types: `manual_feed`, `set_schedule`, `set_rtc`, `get_state`.
+Command types: `manual_feed`, `set_schedule`, `set_threshold`, `set_rtc`, `get_state`.
+See `DEVICE_PROTOCOL.md` for the full contract.
 
 ## Quick start
 
 ```bash
-# 1. Broker (Homebrew service, auto-starts on boot)
-brew services start mosquitto
-lsof -iTCP:1883 -sTCP:LISTEN
+# 1. Platform (broker + database + dashboard)
+cd dashboard
+pipenv install
+pipenv shell
+python run.py                 # → http://localhost:8501
 
-# 2. Simulator needs Node v22 (nvm)
-nvm use 22
+# 2. Simulator, in a second terminal (needs Node v22)
 node /Users/macbookpro/Documents/TA-UPH/sim.js
-
-# 3. Node-RED (separate terminal)
-node-red        # editor → http://localhost:1880
 ```
 
-Verify the round trip from a third terminal:
+Send a command from the CLI:
 
 ```bash
-mosquitto_sub -t 'feeder/#' -v &
-mosquitto_pub -t 'feeder/nodered-sim/command' \
-  -m '{"command_id":"t1","type":"manual_feed","payload":{"portions":2}}'
+cd dashboard
+pipenv run python cli.py manual_feed feeder01 '{"portions":2}'
 ```
 
-Expected: the simulator acks `{"result":"ok","message":"feeding 2 portions"}`.
+Inspect the database directly (plain file, no server):
+
+```bash
+sqlite3 dashboard/feeder.db "SELECT * FROM v_device_status;"
+```
 
 ## Docs
 
 | File | Purpose |
 |------|---------|
 | `STARTUP_GUIDE.md` | Step-by-step resume after reboot, verification, troubleshooting |
+| `DEVICE_PROTOCOL.md` | The contract the ESP32 firmware must implement |
+| `DATABASE_PLAN.md` | Database design (tables, view, alert rules) |
 | `MQTT_FOUNDATION_PLAN.md` | Phase plan: broker setup, protocol tests, message schema design |
+| `CHEATSHEET.md` | Daily operational commands |
+| `dashboard/README.md` | How the app is put together and how to run it |
 
 ## Environment notes
 
 - Intel Mac (i7-8569U), macOS, Homebrew at `/usr/local`
+- Python 3.14 with Pipenv (see `dashboard/Pipfile`); Streamlit + amqtt + paho-mqtt + pandas
 - Node: system v24, but `sim.js` runs under Node **v22.23.2** (nvm)
-- Docker not required — Homebrew/npm cover everything
-- Ports 1883 (MQTT) and 1880 (Node-RED)
+- Docker not required
+- Ports: 1883 (MQTT broker, in-app) and 8501 (dashboard)

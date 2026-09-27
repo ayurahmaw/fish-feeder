@@ -1,5 +1,10 @@
 # MQTT Foundation Plan — ESP32 Aquaponic Autofeeder
 
+> **Status (2026-09-27):** fase ini selesai dan dicatat sebagai sejarah. Broker Mosquitto
+> berdiri sendiri + Node-RED sekarang digantikan **broker MQTT tertanam** (amqtt) di dalam
+> satu aplikasi Python `dashboard/`, dengan database SQLite di proses yang sama.
+> Langkah yang berlaku sekarang: lihat `STARTUP_GUIDE.md` dan `README.md`.
+
 Goal of this phase: stand up a local MQTT server + a simulator (Node-RED), and verify
 bidirectional publish/subscribe — proving the ESP32 communication layer at the protocol
 level before designing the full message schema.

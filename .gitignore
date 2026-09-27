@@ -57,5 +57,15 @@ dkms.conf
 *.DS_Store
 *.env
 
-# Node
-backend/node_modules/
+# Local tooling state (not project source)
+.commandcode/
+
+# Python / dashboard
+.venv/
+__pycache__/
+*.py[cod]
+
+# SQLite database (created at runtime)
+*.db
+*.db-wal
+*.db-shm

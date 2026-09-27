@@ -1,14 +1,14 @@
 # Device Protocol — Kontrak MQTT untuk Firmware ESP32
 
-> Referensi backend/dashboard: `MQTT_FOUNDATION_PLAN.md`, `DATABASE_PLAN.md`.
+> Referensi platform/dashboard: `MQTT_FOUNDATION_PLAN.md`, `DATABASE_PLAN.md`.
 > Dokumen ini = "apa yang harus dilakukan device". Sudah tervalidasi E2E dengan
-> `sim.js` + backend + database.
+> `sim.js` + aplikasi (broker MQTT tertanam + database SQLite).
 
 ## 1. Koneksi
 
 | Parameter | Nilai | Catatan |
 |---|---|---|
-| Broker | `mqtt://<IP-Mac-anda>:1883` | Mosquitto di Mac |
+| Broker | `mqtt://<IP-Mac-anda>:1883` | Broker MQTT di dalam aplikasi (default port `1883`) |
 | ClientId | `feeder01` | **Harus unik & stabil** — jangan dipakai 2 proses (bug nyata: sesi saling tendang) |
 | Keepalive | 60 s | |
 | LWT (Will) | topic `feeder/feeder01/status`, payload `offline`, **retain=true** | Otomatis terpublish broker saat device mati |
@@ -26,11 +26,17 @@
 
 | Topic | Isi |
 |---|---|
-| `feeder/feeder01/command` | JSON perintah dari backend/dashboard (lihat §3) |
+| `feeder/feeder01/command` | JSON perintah dari platform/dashboard (lihat §3) |
+
+> **Penting — filter berdasarkan topic.** Firmware **wajib mengabaikan setiap pesan yang
+> topic-nya bukan `feeder/<device>/command`**, jangan menganggap semua pesan masuk sebagai
+> perintah. Broker tertanam (amqtt) punya perilaku non-standar: pesan *retained*
+> (mis. `status` `online`/`offline`) bisa ikut terkirim ke subscriber apa pun tanpa
+> memedulikan filter topic. Filter di sisi device membuat perilaku broker itu tidak berbahaya.
 
 ## 2. Payload Telemetry (device → platform)
 
-Format target firmware (jarak mentah dari sensor ultrasonik — backend yang
+Format target firmware (jarak mentah dari sensor ultrasonik — aplikasi yang
 menghitung persen dari kalibrasi di database):
 
 ```json
@@ -46,11 +52,11 @@ menghitung persen dari kalibrasi di database):
 |---|---|---|
 | `device` | ya | device_code (harus sama dengan clientId) |
 | `state` | ya | `idle` / `feeding` / `error` |
-| `distance_cm` | target utama | jarak sensor ke permukaan pakan (cm). Persen dihitung backend: `(empty_cm − distance) / (empty_cm − full_cm) × 100` |
+| `distance_cm` | target utama | jarak sensor ke permukaan pakan (cm). Persen dihitung aplikasi: `(empty_cm − distance) / (empty_cm − full_cm) × 100` |
 | `feed_level_pct` | alternatif | boleh menggantikan `distance_cm` jika firmware sudah hitung sendiri persen |
 | `ts` | opsional | ISO-8601; DB pakai waktu terima jika tidak ada |
 
-Backend juga menerima format lama `{ "level": 50 }` (Node-RED) — kompatibel.
+Aplikasi juga menerima format lama `{ "level": 50 }` (Node-RED) — kompatibel.
 
 ## 3. Payload Command (platform → device, device SUBSCRIBE)
 
@@ -85,8 +91,8 @@ Backend juga menerima format lama `{ "level": 50 }` (Node-RED) — kompatibel.
 Aturan:
 - **`command_id` di-echo sama persis** — ini kunci korelasi di database.
 - `result`: `"ok"` = sukses; nilai lain (`"error_low_level"`, `"error_servo"`, dst) = gagal
-  → backend mencatat `failed` + membuat notifikasi `feed_failed`.
-- **Tanpa ack dalam 30 detik** → backend menandai command `timeout`
+  → aplikasi mencatat `failed` + membuat notifikasi `feed_failed`.
+- **Tanpa ack dalam 30 detik** → aplikasi menandai command `timeout`
   dan feeding_log `failed` (sudah otomatis).
 - Ack dikirim meskipun perintah gagal dieksekusi (result error), bukan diam.
 
@@ -97,9 +103,9 @@ Aturan:
 ```mermaid
 sequenceDiagram
     participant D as ESP32 (feeder01)
-    participant B as Mosquitto Broker
-    participant P as Backend (Node.js)
-    participant DB as MySQL feeder_db
+    participant B as Broker MQTT
+    participant P as Platform (Python)
+    participant DB as SQLite feeder_db
 
     D->>B: CONNECT (clientId=feeder01, LWT offline)
     D->>B: PUBLISH status "online" (retain)
@@ -124,8 +130,8 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant U as User (Dashboard/CLI)
-    participant P as Backend
-    participant DB as MySQL
+    participant P as Platform
+    participant DB as SQLite
     participant B as Broker
     participant D as ESP32
 
@@ -145,8 +151,8 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant P as Backend
-    participant DB as MySQL
+    participant P as Platform
+    participant DB as SQLite
     participant B as Broker
     participant D as ESP32
 
@@ -166,6 +172,7 @@ sequenceDiagram
 - [ ] ClientId unik + stabil (`feeder01`)
 - [ ] Birth `online` (retain) + LWT `offline` (retain) di topic `status`
 - [ ] Subscribe `feeder/feeder01/command`
+- [ ] **Abaikan pesan yang topic-nya bukan `feeder/feeder01/command`** (lihat catatan §1)
 - [ ] Publish telemetry periodik dengan `distance_cm`
 - [ ] **Echo `command_id`** di setiap ack, kirim untuk sukses MAUPUN gagal
 - [ ] State `feeding` saat motor jalan

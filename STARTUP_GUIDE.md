@@ -2,110 +2,107 @@
 
 Use this whenever the machine was turned off and you want to pick the project back up.
 Everything runs locally on this Mac (Intel, Homebrew at `/usr/local`).
-Duration ≈ 2 minutes.
 
 ---
 
-## Quick reference (all commands, in order)
+## Yang perlu jalan
+
+Hanya **dua** hal:
+
+1. **Aplikasi platform** — broker MQTT + database SQLite + dashboard, semuanya di dalam satu
+   proses Python (`dashboard/run.py`).
+2. **Simulator device** (`sim.js`) — nanti diganti ESP32.
+
+Tidak ada mosquitto, tidak ada MySQL, tidak ada service yang perlu di-start lebih dulu.
+
+---
+
+## Quick reference (semua perintah, berurutan)
 
 ```bash
-# 1. Broker
-brew services list | grep mosquitto        # if "stopped" → next line
-brew services start mosquitto
-lsof -iTCP:1883 -sTCP:LISTEN               # expect "mosquitto ... LISTEN"
+# Terminal 1 — platform
+cd /Users/macbookpro/Documents/TA-UPH/dashboard
+pipenv install          # hanya pertama kali / setelah Pipfile berubah
+pipenv shell
+python run.py           # → http://localhost:8501
 
-# 2. Simulator needs Node v22 (nvm)
-nvm use 22                                 # must print v22.x
-
-# 3. Simulator (separate terminal)
+# Terminal 2 — simulator (butuh Node v22)
+nvm use 22
 node /Users/macbookpro/Documents/TA-UPH/sim.js
-
-# 4. Node-RED (separate terminal)
-node-red                                  # editor → http://localhost:1880
 ```
 
 ---
 
 ## Step-by-step
 
-### Step 1 — Start the MQTT broker (Mosquitto)
-
-The broker is installed as a Homebrew service, so it may already be running after boot.
-Do not assume — always verify:
+### Step 1 — Jalankan platform (terminal 1)
 
 ```bash
-brew services start mosquitto    # safe to run even if already started
-lsof -iTCP:1883 -sTCP:LISTEN     # should list "mosquitto ... LISTEN" on port 1883
+cd /Users/macbookpro/Documents/TA-UPH/dashboard
+pipenv install
+pipenv shell
+python run.py
 ```
 
-If port 1883 is not listening, see Troubleshooting below.
+Yang diharapkan di log:
 
-### Step 2 — Switch Node to v22 (required for the simulator)
-
-`sim.js` loads the `mqtt` library from a hardcoded Node **v22.23.2** path, so the
-simulator only runs under Node v22. The system default is Node v24 — wrong version here.
-
-```bash
-nvm use 22     # expect: Now using node v22.x.x
+```
+[feeder] broker tertanam berjalan di 0.0.0.0:1883
+[feeder] worker terhubung & subscribe: feeder/+/telemetry  feeder/+/ack  feeder/+/status
+[feeder] runtime siap — broker: embedded (0.0.0.0:1883), db: .../dashboard/feeder.db
+[feeder] platform siap — broker: embedded (0.0.0.0:1883)
 ```
 
-### Step 3 — Start the simulator (one terminal)
+Dashboard: **http://localhost:8501**
+
+> Kalau port 1883 ternyata sudah dipakai (mis. mosquitto jalan sebagai service), aplikasi
+> menulis `port 1883 sudah terpakai — memakai broker yang sudah jalan` dan memakai broker itu.
+> Untuk mode tertanam penuh: `brew services stop mosquitto`.
+
+### Step 2 — Jalankan simulator (terminal 2)
+
+`sim.js` memuat library `mqtt` dari path Node **v22.23.2** yang di-hardcode, jadi ia harus
+jalan di Node v22 (default sistem v24).
 
 ```bash
+nvm use 22
 node /Users/macbookpro/Documents/TA-UPH/sim.js
 ```
 
-Expected output after ~3 s:
+Output yang diharapkan (± 3 detik):
 
 ```
 [sim] starting — broker mqtt://localhost:1883
-[sim] CONNECTED as nodered-sim
-[sim] SUBSCRIBED ...
-[sim] TX telemetry {...}
+[sim] CONNECTED as feeder01
+[sim] SUBSCRIBED to feeder/feeder01/command
+[sim] TX telemetry {"device":"feeder01","state":"idle","feed_level_pct":80,...}
 ```
 
-Leave this terminal open.
+### Step 3 — Verifikasi
 
-### Step 4 — Start Node-RED (another terminal)
+Buka dashboard → tab **Status** (sisa pakan bergerak tiap 3 detik) dan **Live**.
 
-Node-RED is the visual flow editor / alternate simulator.
+Atau lewat CLI:
 
 ```bash
-node-red
+cd /Users/macbookpro/Documents/TA-UPH
+sqlite3 -header -column dashboard/feeder.db "SELECT * FROM v_device_status;"
 ```
 
-- Editor UI: **http://localhost:1880**
-- The flow lives in `/Users/macbookpro/Documents/TA-UPH/flows.json`
-- `mqtt in` / `mqtt out` nodes connect to `localhost:1883`, client id `nodered-sim`
-
-(Optional) Node-RED 4.x officially supports Node 18/20/22. If it warns under Node 24,
-run it under `nvm use 22` instead of the system default.
-
-### Step 5 — Verify everything is talking
-
-Quick round-trip check from a third terminal:
+Uji tombol pakan manual:
 
 ```bash
-# watch the feed
-mosquitto_sub -t 'feeder/#' -v &
-
-# force a manual feed → simulator acks it
-mosquitto_pub -t 'feeder/nodered-sim/command' -m '{"command_id":"t1","type":"manual_feed","payload":{"portions":2}}'
+cd dashboard
+pipenv run python cli.py manual_feed feeder01 '{"portions":2}'
 ```
 
-You should see the simulator print the ack `{"result":"ok","message":"feeding 2 portions"}`.
-Also check the Node-RED debug pane on `http://localhost:1880`.
+Cek hasilnya di `commands` / `feeding_logs` (status berubah `sent` → `success` setelah ack).
 
 ---
 
 ## Shutting down (clean)
 
-Optional — you can also just turn the machine off; brew services auto-start on boot.
-
-```bash
-brew services stop mosquitto
-# Ctrl+C in the sim.js and node-red terminals
-```
+`Ctrl+C` di kedua terminal. Tidak ada service yang perlu dimatikan.
 
 ---
 
@@ -113,11 +110,13 @@ brew services stop mosquitto
 
 | Symptom | Fix |
 |---------|-----|
-| `lsof` shows nothing on 1883 | Broker isn't running: re-run `brew services start mosquitto`, then `lsof -iTCP:1883 -sTCP:LISTEN`. |
-| `nvm: command not found` | nvm is shell-installed — reopen the terminal (or `source ~/.nvm/nvm.sh`). |
-| `sim.js` crashes with `Cannot find module ...node-red/.../mqtt` | Wrong Node version or Node-RED global install changed. Reinstall: `npm install -g node-red` under the v22 that path references. |
-| `sim.js` crashes with `T.commandese` / `text2010` is not defined | Known latent typos in `sim.js` (lines 49/67) — fix them to `T.command` / `text`. |
-| `brew` errors about `compatibility_version` | Homebrew too old for the formula API. See Phase 1 of `MQTT_FOUNDATION_PLAN.md` (`brew update-reset` / re-run official installer). |
+| `pipenv: command not found` | Pipenv belum terpasang: `pip3 install --user pipenv`. |
+| Dashboard "terputus ⏳" di sidebar | Broker tidak jalan. Cek log terminal 1; pastikan tidak ada proses lain yang memegang port 1883. |
+| `port 1883 sudah terpakai` | Berarti ada mosquitto/broker lain. Itu **tidak masalah** — aplikasi memakainya. Untuk mode tertanam: `brew services stop mosquitto`. |
+| `sim.js` crash `Cannot find module ...node-red/.../mqtt` | Node versi salah. Jalankan dengan `nvm use 22`, atau langsung `~/.nvm/versions/node/v22.23.2/bin/node sim.js`. |
+| `nvm: command not found` | nvm di-install lewat shell — buka terminal baru (atau `source ~/.nvm/nvm.sh`). |
+| Data lama/aneh di dashboard | Reset: `rm -f dashboard/feeder.db*` lalu start ulang (skema + seed dibuat otomatis). |
+| Perintah nyangkut `sent` | Device tidak membalas. Setelah 30 detik aplikasi menandainya `timeout` (sweep tiap 10 detik). |
 
 ---
 
@@ -125,13 +124,20 @@ brew services stop mosquitto
 
 | Item | Location |
 |------|----------|
-| Broker config | `/usr/local/etc/mosquitto/mosquitto.conf` |
-| Node-RED flow | `/Users/macbookpro/Documents/TA-UPH/flows.json` (backup: `.flows.json.backup`) |
+| Aplikasi (broker + DB + UI) | `/Users/macbookpro/Documents/TA-UPH/dashboard/` |
+| Entry point | `dashboard/run.py` |
+| Konfigurasi | `dashboard/.env` (contoh: `dashboard/.env.example`) |
+| Database SQLite | `dashboard/feeder.db` (dibuat otomatis) |
+| Skema database | `database/schema.sql` |
 | Simulator | `/Users/macbookpro/Documents/TA-UPH/sim.js` |
-| Project docs | `/Users/macbookpro/Documents/TA-UPH/MQTT_FOUNDATION_PLAN.md` |
+| Node-RED flow | `/Users/macbookpro/Documents/TA-UPH/flows.json` (backup: `.flows.json.backup`) |
+| Dokumen | `MQTT_FOUNDATION_PLAN.md`, `DEVICE_PROTOCOL.md`, `DATABASE_PLAN.md`, `CHEATSHEET.md` |
 
 ---
 
 ## Update log
 
 - **2026-09-16** — Initial version. Steps: broker → Node v22 → simulator → Node-RED → verify.
+- **2026-09-27** — Backend Node + MySQL digantikan satu aplikasi Python: broker MQTT tertanam
+  (amqtt) + SQLite tertanam + dashboard Streamlit. Mulai sekarang hanya 2 terminal
+  (`python run.py` dan `sim.js`), tanpa service eksternal.
