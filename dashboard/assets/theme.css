@@ -34,3 +34,10 @@
   background: rgb(255 255 255 / 4%);
   box-shadow: none;
 }
+
+/* Absolute date-time values are wider than plain numbers; shrink to fit. */
+.st-key-metric_last_seen [data-testid="stMetricValue"] {
+  font-size: 1.2rem;
+  letter-spacing: 0;
+  white-space: nowrap;
+}

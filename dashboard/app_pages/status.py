@@ -52,7 +52,6 @@ def render() -> None:
 
     with left:
         with st.container(border=True, key="card_hero"):
-            st.caption(t("feed_remaining"))
             st.subheader(t("hopper_level"))
             if status["is_empty"]:
                 ui.badge(t("badge_empty"), "critical")
@@ -69,35 +68,28 @@ def render() -> None:
             ui.feed_hero(level, threshold, t("alert_threshold"), caption)
 
     with right:
-        first, second = st.columns(2)
+        first, second, third = st.columns(3)
         with first:
-            ui.metric_card(
-                "straighten",
-                t("sensor_distance"),
-                f"{ui.num(status['distance_cm'])} cm",
-                t("normal_range"),
-            )
-        with second:
             ui.metric_card(
                 "settings_input_component",
                 t("device_state"),
                 state_label(status["state"]),
                 t("servo_ready"),
             )
-        third, fourth = st.columns(2)
-        with third:
+        with second:
             ui.metric_card(
                 "wifi",
                 t("connection"),
                 "Online" if online else "Offline",
                 t("signal_stable"),
             )
-        with fourth:
+        with third:
             ui.metric_card(
                 "schedule",
                 t("last_seen"),
                 ui.fmt_datetime(status["measured_at"]),
                 t("latest_telemetry"),
+                key="metric_last_seen",
             )
 
     schedule_col, activity_col = st.columns(2)

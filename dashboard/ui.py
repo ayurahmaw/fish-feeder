@@ -61,8 +61,14 @@ def section_head(eyebrow: str | None, title: str, description: str | None = None
         st.caption(description)
 
 
-def metric_card(icon: str, label: str, value, helper: str | None = None) -> None:
-    with st.container(border=True):
+def metric_card(
+    icon: str,
+    label: str,
+    value,
+    helper: str | None = None,
+    key: str | None = None,
+) -> None:
+    with st.container(border=True, key=key):
         st.metric(label, value, icon=f":material/{icon}:")
         if helper:
             st.caption(helper)

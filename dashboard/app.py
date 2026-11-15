@@ -71,7 +71,12 @@ with st.sidebar:
     with st.container(border=True):
         st.markdown(f"**{t('system_status')}**")
         ui.badge(t("healthy"), "healthy")
-        st.markdown(f":material/dns: {t('broker')} · {runtime.mode}")
+        mode_key = {
+            "embedded": "broker_embedded",
+            "existing": "broker_existing",
+            "external": "broker_external",
+        }.get(runtime.mode, "broker_external")
+        st.markdown(f":material/dns: {t('broker')} · {t(mode_key)}")
         st.markdown(
             f":material/settings_input_antenna: {t('worker')} · "
             f"{t('connected') if runtime.worker.connected else t('disconnected')}"
@@ -110,7 +115,6 @@ with action_col:
             t("online") if online else t("offline"),
             "healthy" if online else "critical",
         )
-        ui.badge(runtime.mode, "neutral")
         if st.button(t("refresh"), icon=":material/refresh:", key="refresh_top"):
             data.clear_reads()
             ui.toast_after_rerun(t("refreshed_toast"))
