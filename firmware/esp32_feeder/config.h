@@ -33,8 +33,22 @@
 #define MQTT_HOST "127.0.0.1"
 #endif
 
+// Optional auth/TLS — override these in secrets.h for a protected broker.
+#ifndef MQTT_PORT
 #define MQTT_PORT 1883
-#define TOPIC_PREFIX "feeder"
+#endif
+#ifndef MQTT_USE_TLS
+#define MQTT_USE_TLS 0
+#endif
+#ifndef MQTT_USER
+#define MQTT_USER ""
+#endif
+#ifndef MQTT_PASS
+#define MQTT_PASS ""
+#endif
+
+// Unique topic namespace so a public broker is not shared with other projects.
+#define TOPIC_PREFIX "feeder-ayurahmaw"
 
 // ===========================================================================
 // Pins — ESP32-WROOM-32 DevKit V1 (30-pin)

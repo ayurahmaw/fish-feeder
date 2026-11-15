@@ -52,15 +52,29 @@ cp secrets.h.example secrets.h
 // secrets.h
 #define WIFI_SSID "…"
 #define WIFI_PASS "…"
-#define MQTT_HOST "192.168.1.100"   // `ipconfig getifaddr en0` on the Mac running the dashboard
+#define MQTT_HOST "broker.hivemq.com"   // deployed app's broker
+// Local run instead: the Mac's LAN address (`ipconfig getifaddr en0`)
+```
+
+For an authenticated + TLS broker (e.g. HiveMQ Cloud free), also uncomment:
+
+```cpp
+#define MQTT_PORT 8883
+#define MQTT_USE_TLS 1
+#define MQTT_USER "…"
+#define MQTT_PASS "…"
 ```
 
 Everything else stays in `config.h` (pins, calibration, timings), including
-`DEVICE_ID_OVERRIDE` — empty derives the id from the MAC (`feeder-64008c`).
+`DEVICE_ID_OVERRIDE` — empty derives the id from the MAC (`feeder-64008c`) — and
+`TOPIC_PREFIX`, which defaults to `feeder-ayurahmaw`. Keep `TOPIC_PREFIX` equal to the app's
+`MQTT_TOPIC_PREFIX` secret. Topic examples in this README use `feeder/`; the sketch publishes
+under `feeder-ayurahmaw/` unless you change it.
 
-`MQTT_HOST` must be the Mac's current Wi-Fi address — DHCP changes it (this machine moved from
-`.83` to `.85` during setup, which silently breaks the connection). Either re-check with
-`ipconfig getifaddr en0` after every reconnect, or give the Mac a DHCP reservation in the router.
+For a local broker, `MQTT_HOST` must be the Mac's current Wi-Fi address — DHCP changes it (this
+machine moved from `.83` to `.85` during setup, which silently breaks the connection). Either
+re-check with `ipconfig getifaddr en0` after every reconnect, or give the Mac a DHCP reservation
+in the router.
 
 ### Device id
 

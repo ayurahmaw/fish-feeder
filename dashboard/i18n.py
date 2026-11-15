@@ -117,6 +117,19 @@ STRINGS: dict[str, dict[str, str]] = {
     "ack_timeout": {"id": "Timeout ack", "en": "ACK timeout"},
     "local_footer": {"id": "Jaringan lokal · v1.1", "en": "Local network · v1.1"},
     "no_device": {"id": "Belum ada device di database.", "en": "No device in the database yet."},
+    "data_backup": {"id": "Data & backup", "en": "Data & backup"},
+    "data_backup_sub": {
+        "id": "Penyimpanan Cloud bersifat sementara. Unduh cadangan sebelum "
+              "redeploy, unggah untuk memulihkan riwayat.",
+        "en": "Cloud storage is ephemeral. Download a backup before redeploying; "
+              "upload one to restore history.",
+    },
+    "download_db": {"id": "Unduh database", "en": "Download database"},
+    "restore_db": {"id": "Pulihkan database", "en": "Restore database"},
+    "restore_apply": {"id": "Terapkan restore", "en": "Apply restore"},
+    "restore_ok": {"id": "Database berhasil dipulihkan", "en": "Database restored"},
+    "restore_failed": {"id": "Gagal memulihkan: {err}", "en": "Restore failed: {err}"},
+    "backup_failed": {"id": "Gagal membuat cadangan: {err}", "en": "Backup failed: {err}"},
 
     # shared
     "portions": {"id": "porsi", "en": "portions"},

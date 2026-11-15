@@ -67,6 +67,34 @@ def transaction():
     conn.execute("COMMIT")
 
 
+def backup_to(path: str) -> None:
+    """Write a consistent snapshot of the live database to ``path``."""
+    dest = sqlite3.connect(path)
+    try:
+        connection().backup(dest)
+    finally:
+        dest.close()
+
+
+def restore_from(path: str) -> None:
+    """Replace the live database contents with the SQLite file at ``path``.
+
+    Uses SQLite's backup API, so the open UI and MQTT-worker connections keep
+    working — no file swap happens underneath them.
+    """
+    src = sqlite3.connect(path)
+    try:
+        found = src.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='devices'"
+        ).fetchone()
+        if found is None:
+            raise ValueError("file is not a feeder database")
+        src.backup(connection())
+    finally:
+        src.close()
+    connection().execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+
 def init_db() -> None:
     """Create the schema if it isn't there yet. Safe to call on every start."""
     global _initialized

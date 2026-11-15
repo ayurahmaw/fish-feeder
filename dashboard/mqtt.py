@@ -39,6 +39,10 @@ class Worker:
             client_id=config.CLIENT_ID,
             clean_session=True,
         )
+        if config.MQTT_USERNAME:
+            self.client.username_pw_set(config.MQTT_USERNAME, config.MQTT_PASSWORD)
+        if config.MQTT_TLS:
+            self.client.tls_set()
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self.client.on_connect_fail = self._on_connect_fail

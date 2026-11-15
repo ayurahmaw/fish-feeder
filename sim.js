@@ -17,7 +17,9 @@ const mqtt = require('/Users/macbookpro/.nvm/versions/node/v22.23.2/lib/node_mod
 // Keep broker/prefix in sync with the app's Cloud secrets.
 const CFG = {
   broker:  process.env.MQTT_URL || 'mqtt://broker.hivemq.com:1883',
-  prefix:  process.env.MQTT_TOPIC_PREFIX || 'feeder',
+  prefix:  process.env.MQTT_TOPIC_PREFIX || 'feeder-ayurahmaw',
+  username: process.env.MQTT_USERNAME || undefined,
+  password: process.env.MQTT_PASSWORD || undefined,
   deviceId: 'feeder01',             // sinkron dengan seed database (devices.device_code)
   intervalMs: 3000,
 };
@@ -35,6 +37,8 @@ let cmdCounter = 0;
 
 const client = mqtt.connect(CFG.broker, {
   clientId: CFG.deviceId,
+  username: CFG.username,
+  password: CFG.password,
   clean: false,
   keepalive: 60,
   // LWT: broker publishes this automatically if the sim (or later ESP32) dies

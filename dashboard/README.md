@@ -30,10 +30,14 @@ Cloud menjalankan `streamlit run <main file>` dari root repo, bukan `run.py`
 (jadi broker/worker baru menyala saat halaman pertama dibuka — tetap berfungsi).
 
 - Main file path: **`dashboard/app.py`**
-- Python: **3.12 / 3.13**
+- Python: **3.12–3.14**
 - Dependensi: `requirements.txt` di root repo (bukan `Pipfile`)
 - Konfigurasi: panel **Secrets** (contoh: `.streamlit/secrets.toml.example`),
   karena `.env` tidak ikut ter-deploy
+- Broker: `EMBED_BROKER="false"` + `MQTT_URL` publik/ber-auth, dan
+  `MQTT_TOPIC_PREFIX="feeder-ayurahmaw"` (samakan dengan firmware/simulator)
+- Riwayat DB: filesystem Cloud sementara — gunakan **Data & backup** di sidebar
+  untuk mengunduh/memulihkan `feeder.db`
 
 Detail langkah ada di README root bagian *Deploy ke Streamlit Community Cloud*.
 

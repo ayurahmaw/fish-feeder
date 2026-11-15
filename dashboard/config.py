@@ -62,8 +62,14 @@ def _bool(value, default):
 
 # --- MQTT -------------------------------------------------------------------
 MQTT_URL = os.getenv("MQTT_URL", "mqtt://localhost:1883")
-TOPIC_PREFIX = os.getenv("MQTT_TOPIC_PREFIX", "feeder")
+TOPIC_PREFIX = os.getenv("MQTT_TOPIC_PREFIX", "feeder-ayurahmaw")
 CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "feeder-dashboard")
+
+# Optional broker credentials. Leave blank for anonymous brokers; fill these in
+# when MQTT_URL points at a protected broker (e.g. HiveMQ Cloud with TLS).
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
+MQTT_TLS = _bool(os.getenv("MQTT_TLS"), False)
 
 # Embedded broker. When true the app hosts the broker itself; when false it
 # connects to whatever broker MQTT_URL points at (e.g. a local mosquitto).

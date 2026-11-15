@@ -91,22 +91,27 @@ Langkah:
 1. Push repo ke GitHub.
 2. Buka <https://share.streamlit.io> → **New app** → pilih repo & branch `main`.
 3. **Main file path**: `dashboard/app.py`.
-4. **Advanced settings** → Python **3.12** atau **3.13** (bukan 3.14).
-5. (Opsional) **Secrets** — tempel isi `.streamlit/secrets.toml.example`.
+4. **Advanced settings** → Python **3.12–3.14** (3.14 cocok dengan lock lokal).
+5. **Secrets** — tempel isi `.streamlit/secrets.toml.example` (lihat catatan).
 6. **Deploy**.
 
 Catatan Cloud:
 
-- Default `EMBED_BROKER=true` aman: broker berjalan di dalam container dan
-  dashboard tetap tampil (data awal `feeder01` di-seed otomatis). Tapi device
-  luar **tidak bisa** connect ke broker di dalam Cloud.
-- Agar `sim.js` / ESP32 bisa mengirim data, set `EMBED_BROKER="false"` dan arahkan
-  `MQTT_URL` ke broker yang bisa diakses publik. `sim.js` dan firmware sekarang
-  default ke `broker.hivemq.com:1883` dengan prefix `feeder` (samakan dengan
-  `MQTT_TOPIC_PREFIX` di Cloud secrets). Device tidak connect ke URL Streamlit —
-  Cloud tidak bisa menerima koneksi MQTT masuk.
-- Filesystem Cloud bersifat sementara: `feeder.db` dibuat ulang dan di-seed
-  setiap restart/redeploy.
+- **Broker**: `EMBED_BROKER="false"`, `MQTT_URL="mqtt://broker.hivemq.com:1883"`,
+  `MQTT_TOPIC_PREFIX="feeder-ayurahmaw"`. Device **tidak** connect ke URL Streamlit
+  — Cloud tidak bisa menerima koneksi MQTT masuk, jadi app dan device bertemu di
+  broker yang sama.
+- `sim.js` dan firmware memakai broker + prefix yang sama secara default. Kalau
+  prefix diganti, ubah juga `MQTT_TOPIC_PREFIX` di Cloud secrets dan `TOPIC_PREFIX`
+  di `firmware/esp32_feeder/config.h`.
+- **Keamanan**: broker publik `broker.hivemq.com` bersifat anonim. Untuk demo yang
+  lebih aman pakai broker ber-auth + TLS (mis. HiveMQ Cloud free): isi
+  `MQTT_URL="mqtts://<cluster>:8883"`, `MQTT_USERNAME`, `MQTT_PASSWORD`,
+  `MQTT_TLS="true"` di Cloud; di firmware isi `MQTT_PORT 8883`, `MQTT_USE_TLS 1`,
+  `MQTT_USER`, `MQTT_PASS` pada `secrets.h`.
+- **Data**: filesystem Cloud sementara. Buka sidebar **Data & backup** →
+  **Unduh database** sebelum redeploy, lalu unggah file `.db` untuk memulihkan
+  riwayat. Tanpa restore, `feeder.db` dibuat ulang dan di-seed setiap restart.
 
 ## Docs
 

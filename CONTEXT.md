@@ -155,7 +155,9 @@ Web Dashboard dibagi menjadi beberapa tab/halaman utama:
 ## 6. DATA & PROTOCOL MODELS
 
 ### 6.1 MQTT Topic Structure
-Semua topik memakai format `feeder/<device_id>/<jenis>` (`feeder01` = device_id):
+Semua topik memakai format `<prefix>/<device_id>/<jenis>`. Prefix default di kode adalah
+`feeder-ayurahmaw` (bisa diubah lewat `MQTT_TOPIC_PREFIX` di app dan `TOPIC_PREFIX` di
+`firmware/esp32_feeder/config.h`); contoh di bawah memakai `feeder` (`feeder01` = device_id):
 
 | Topik | Arah | Isi / Payload |
 |---|---|---|
@@ -1332,3 +1334,32 @@ Catatan:
 | **Kalibrasi full/empty** | Jarak sensor saat hopper penuh dan kosong, untuk konversi jarak ke persen. |
 | **WAL** | *Write-Ahead Logging* — mode SQLite yang mengizinkan baca & tulis bersamaan. |
 | **Sweeper** | Thread berkala (10 s) yang menandai command tanpa ack sebagai `timeout`. |
+
+## 21. DEPLOYMENT — STREAMLIT COMMUNITY CLOUD
+
+Arsitektur deploy: `device / sim.js → broker MQTT eksternal → app Streamlit (worker) → SQLite`.
+Streamlit Community Cloud hanya menerima HTTP, jadi **broker tidak berjalan di Cloud**; app dan
+device bertemu di broker eksternal yang sama. App tidak menerima koneksi MQTT masuk.
+
+Konfigurasi Cloud (panel **Secrets**):
+- `EMBED_BROKER="false"`
+- `MQTT_URL="mqtt://broker.hivemq.com:1883"` — atau broker ber-auth `mqtts://<host>:8883`
+- `MQTT_TOPIC_PREFIX="feeder-ayurahmaw"` (harus sama dengan firmware/simulator)
+- Opsional auth/TLS: `MQTT_USERNAME`, `MQTT_PASSWORD`, `MQTT_TLS="true"`
+
+Konfigurasi device:
+- `firmware/esp32_feeder/secrets.h`: `MQTT_HOST`, dan bila ber-auth juga
+  `MQTT_PORT 8883`, `MQTT_USE_TLS 1`, `MQTT_USER`, `MQTT_PASS`.
+- `TOPIC_PREFIX` di `config.h` harus sama dengan `MQTT_TOPIC_PREFIX` app.
+
+Berkas deploy: main file path `dashboard/app.py`, dependensi `requirements.txt` di root,
+tema `.streamlit/config.toml` di root (Cloud menjalankan app dengan CWD di root repo).
+
+Batasan:
+- **Filesystem ephemeral.** `feeder.db` dibuat ulang + di-seed saat restart/redeploy. Riwayat
+  dipertahankan manual lewat sidebar **Data & backup** (unduh/unggah `feeder.db`); restore
+  memakai SQLite backup API sehingga koneksi UI dan worker tetap valid.
+- **Broker publik anonim.** Minimal gunakan prefix unik; lebih baik broker auth + TLS karena
+  siapa pun yang tahu topic dapat mengirim `manual_feed`.
+- Device id dari MAC (mis. `feeder-64008c`) otomatis dibuat di tabel `devices` saat kontak
+  pertama; seed `feeder01` tetap ada tetapi akan tampak offline bila tidak ada device-nya.

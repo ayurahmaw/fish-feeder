@@ -8,12 +8,15 @@ database and ingestion worker are started by ``runtime.py`` (via ``run.py``).
 
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 
 import streamlit as st
 
 import config
 import data
+import db
 import ui
 from i18n import PAGE_COPY, locale, t
 from runtime import get_runtime
@@ -97,6 +100,43 @@ with st.sidebar:
         key="locale",
         format_func=lambda value: "ID" if value == "id" else "EN",
     )
+
+    with st.expander(t("data_backup"), icon=":material/database:"):
+        st.caption(t("data_backup_sub"))
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                snapshot = Path(tmp) / "feeder.db"
+                db.backup_to(str(snapshot))
+                payload = snapshot.read_bytes()
+            st.download_button(
+                t("download_db"),
+                payload,
+                file_name="feeder.db",
+                mime="application/vnd.sqlite3",
+                icon=":material/download:",
+            )
+        except Exception as exc:
+            st.caption(t("backup_failed", err=str(exc)))
+
+        upload = st.file_uploader(
+            t("restore_db"), type=["db", "sqlite", "sqlite3"], key="restore_upload"
+        )
+        if upload is not None and st.button(t("restore_apply"), icon=":material/upload:"):
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
+                    tmp.write(upload.getvalue())
+                    tmp_path = tmp.name
+                db.restore_from(tmp_path)
+                data.clear_reads()
+                ui.toast_after_rerun(t("restore_ok"))
+                st.rerun()
+            except Exception as exc:
+                st.error(t("restore_failed", err=str(exc)))
+            finally:
+                if tmp_path:
+                    os.unlink(tmp_path)
+
     st.caption(t("local_footer"))
 
 # --------------------------------------------------------------------------- #

@@ -1,6 +1,7 @@
 #include "net.h"
 
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <esp_mac.h>
 
 #include "config.h"
@@ -8,7 +9,11 @@
 namespace net {
 
 namespace {
+#if MQTT_USE_TLS
+WiFiClientSecure transport;
+#else
 WiFiClient transport;
+#endif
 }  // namespace
 
 // Must be constructed with the transport: the default PubSubClient() leaves
@@ -83,8 +88,14 @@ bool connectOnce() {
   const String commandTopic = topic("command");
 
   // LWT: broker publishes "offline" (retained) if this device drops.
-  const bool ok = client.connect(deviceIdValue.c_str(), nullptr, nullptr,
-                                 statusTopic.c_str(), 0, true, "offline");
+  bool ok;
+  if (strlen(MQTT_USER) > 0) {
+    ok = client.connect(deviceIdValue.c_str(), MQTT_USER, MQTT_PASS, statusTopic.c_str(), 0,
+                        true, "offline");
+  } else {
+    ok = client.connect(deviceIdValue.c_str(), nullptr, nullptr, statusTopic.c_str(), 0, true,
+                        "offline");
+  }
   if (!ok) {
     Serial.printf("[mqtt] connect gagal rc=%d\n", client.state());
     return false;
@@ -116,6 +127,10 @@ void begin(CommandHandler handler) {
   logVisibleNetworks();
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
+#if MQTT_USE_TLS
+  // Encryption without pinning a CA bundle; pair with username/password.
+  transport.setInsecure();
+#endif
   client.setServer(MQTT_HOST, MQTT_PORT);
   client.setBufferSize(MQTT_BUFFER_SIZE);
   client.setKeepAlive(60);
