@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="48" viewBox="0 0 220 48" fill="none" role="img" aria-label="AquaFeed">
+  <rect x="0" y="4" width="40" height="40" rx="13" fill="#087f70"/>
+  <ellipse cx="19" cy="24" rx="9.5" ry="6.4" fill="#ffffff"/>
+  <path d="M26.5 24c2.9 1.9 4.8 4 6.3 6.2.3-4 .3-8.4 0-12.4-1.5 2.2-3.4 4.3-6.3 6.2Z" fill="#ffffff"/>
+  <circle cx="15.4" cy="22.2" r="1.5" fill="#087f70"/>
+  <text x="52" y="24" font-family="Manrope, 'DM Sans', sans-serif" font-size="19" font-weight="700" fill="#ffffff">AquaFeed</text>
+  <text x="52" y="39" font-family="'DM Sans', sans-serif" font-size="9.5" letter-spacing="1.4" fill="#9cb8b2">IOT FEEDER</text>
+</svg>

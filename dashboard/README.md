@@ -58,16 +58,30 @@ Yang penting:
 | `DB_PATH` | Lokasi file SQLite (default `dashboard/feeder.db`). |
 | `COMMAND_TIMEOUT_SEC` | Perintah tanpa ack selama ini ditandai `timeout`. |
 
-## Tab
+## Halaman
 
-| Tab | Isi |
+| Halaman | Isi |
 |---|---|
-| **Status** | Sisa pakan (%), jarak sensor, state, online, plus badge alert |
-| **Live** | Grafik telemetry + daftar pesan MQTT terbaru |
-| **Alerts** | Notifikasi (`feed_low`, `feed_empty`, `feed_failed`, `device_offline`) |
-| **History** | Riwayat pemberian pakan |
-| **Schedules** | Lihat / tambah / aktif-nonaktif jadwal, kirim `set_schedule` |
-| **Control** | Pakan manual, `get_state`, `set_threshold`, `set_rtc` |
+| **Status** | Level hopper, empat metric (jarak, state, koneksi, terakhir terlihat), jadwal berikutnya, aktivitas pakan terakhir, aksi cepat |
+| **Live** | Grafik telemetry 1/6/24 jam + ambang, daftar pesan MQTT terbaru (filter + jeda) |
+| **Notifikasi** | Ringkasan belum dibaca/peringatan/kritis, filter, tandai dibaca per item atau semua |
+| **Riwayat** | Riwayat pakan 1/7/30 hari, ringkasan sukses/gagal/porsi, filter status |
+| **Jadwal** | Tambah/ubah/hapus jadwal, aktif–nonaktif, indikator perubahan, kirim `set_schedule` |
+| **Kontrol** | `manual_feed` (dengan konfirmasi), `get_state`, `set_threshold`, `set_rtc`, log perintah |
+
+Halaman Status dan Live menyegarkan diri tiap 2 detik (`st.fragment`); halaman
+lain diperbarui saat berinteraksi.
+
+## Tampilan & bahasa
+
+- **Tema**: `.streamlit/config.toml` memakai palet prototipe (kanvas `#f4f7f6`,
+  aksen `#087f70`, sidebar navy `#0c2927`, font DM Sans + Manrope).
+- **Bahasa**: toggle **ID / EN** di sidebar; default Bahasa Indonesia. Semua
+  teks UI ada di `i18n.py`.
+- **Logo**: `assets/brand.svg`. Sentuhan visual tambahan (kartu, gradasi hero)
+  ada di `assets/theme.css` dengan selector berbasis `key`.
+- Grafik memakai Altair (sudah termasuk di Streamlit), bukan komponen
+  tambahan.
 
 ## Database
 
@@ -77,4 +91,16 @@ start. Untuk melihat isinya:
 ```bash
 sqlite3 feeder.db "SELECT * FROM v_device_status;"
 sqlite3 feeder.db "SELECT type, severity, message, created_at FROM notifications ORDER BY created_at DESC LIMIT 5;"
+```
+
+## Struktur
+
+```
+app.py           # router + sidebar/topbar + tema
+app_pages/       # status, live, alerts, history, schedules, control
+actions.py       # dialog konfirmasi pakan + helper kirim perintah
+data.py          # query baca ber-cache (ttl 2-5 s)
+ui.py            # badge, metric card, hopper, grafik, format waktu
+i18n.py          # kamus ID/EN
+assets/          # brand.svg, theme.css
 ```

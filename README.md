@@ -37,7 +37,7 @@ feeder/<device>/ack         device → platform  command acknowledgement
 
 Messages are JSON; every command carries a `command_id` so acks can be matched.
 Command types: `manual_feed`, `set_schedule`, `set_threshold`, `set_rtc`, `get_state`.
-See `DEVICE_PROTOCOL.md` for the full contract.
+See `CONTEXT.md` §10 for the full contract.
 
 ## Quick start
 
@@ -67,14 +67,18 @@ sqlite3 dashboard/feeder.db "SELECT * FROM v_device_status;"
 
 ## Docs
 
+**`CONTEXT.md` is the single source of truth** — the full PRD: requirements (FR/NFR), MQTT
+protocol contract, database design, all flowcharts/sequence diagrams, traceability matrix,
+timeline, risks, and operational commands.
+
 | File | Purpose |
 |------|---------|
-| `STARTUP_GUIDE.md` | Step-by-step resume after reboot, verification, troubleshooting |
-| `DEVICE_PROTOCOL.md` | The contract the ESP32 firmware must implement |
-| `DATABASE_PLAN.md` | Database design (tables, view, alert rules) |
-| `MQTT_FOUNDATION_PLAN.md` | Phase plan: broker setup, protocol tests, message schema design |
-| `CHEATSHEET.md` | Daily operational commands |
+| **`CONTEXT.md`** | The complete PRD (requirements + design + flows + ops) |
 | `dashboard/README.md` | How the app is put together and how to run it |
+| `database/schema.sql` · `database/example_queries.sql` | Executable schema + example queries |
+
+The former docs (`STARTUP_GUIDE.md`, `DEVICE_PROTOCOL.md`, `DATABASE_PLAN.md`, `CHEATSHEET.md`,
+`MQTT_FOUNDATION_PLAN.md`, `dashboard/*FLOWCHART*.md`) are archived stubs pointing into `CONTEXT.md`.
 
 ## Environment notes
 

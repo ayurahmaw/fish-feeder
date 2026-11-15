@@ -69,3 +69,6 @@ __pycache__/
 *.db
 *.db-wal
 *.db-shm
+
+Streamlit*/
+UTS*

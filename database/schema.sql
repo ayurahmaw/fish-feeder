@@ -1,7 +1,7 @@
 -- ============================================================================
 -- feeder_db — SQLite schema untuk Sistem Pakan Otomatis (ESP32 Autofeeder)
--- Desain lengkap: lihat DATABASE_PLAN.md
--- Protokol MQTT : lihat MQTT_FOUNDATION_PLAN.md / DEVICE_PROTOCOL.md
+-- Desain lengkap: lihat CONTEXT.md §11 (Desain Database)
+-- Protokol MQTT : lihat CONTEXT.md §6 & §10
 --
 -- Engine  : SQLite 3.35+ (butuh window function untuk view v_device_status)
 -- File    : dashboard/feeder.db — dibuat otomatis oleh aplikasi saat start

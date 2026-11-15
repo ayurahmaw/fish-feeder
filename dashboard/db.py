@@ -363,3 +363,47 @@ def list_feeding_logs(device_id: int, since: str, until: str):
         (device_id, since, until),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# commands (recent activity) + last feeding event
+# ---------------------------------------------------------------------------
+
+
+def list_commands(device_id: int, limit: int = 10):
+    rows = connection().execute(
+        "SELECT command_id, type, payload, status, result_message, created_at, acked_at "
+        "FROM commands WHERE device_id = ? "
+        "ORDER BY created_at DESC, id DESC LIMIT ?",
+        (device_id, int(limit)),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def latest_feeding_log(device_id: int):
+    row = connection().execute(
+        "SELECT fl.id, fl.requested_at, fl.trigger_type, fl.portions, fl.status, "
+        "fl.message, fl.feed_level_before_pct, fl.feed_level_after_pct, "
+        "s.name AS schedule_name "
+        "FROM feeding_logs fl LEFT JOIN schedules s ON s.id = fl.schedule_id "
+        "WHERE fl.device_id = ? ORDER BY fl.requested_at DESC, fl.id DESC LIMIT 1",
+        (device_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
+# schedule edits/deletes (feeding_logs.schedule_id is ON DELETE SET NULL)
+# ---------------------------------------------------------------------------
+
+
+def update_schedule(schedule_id: int, *, name: str, feed_time: str, portions: int) -> None:
+    connection().execute(
+        f"UPDATE schedules SET name = ?, feed_time = ?, portions = ?, "
+        f"updated_at = {NOW} WHERE id = ?",
+        (name, feed_time, int(portions), schedule_id),
+    )
+
+
+def delete_schedule(schedule_id: int) -> None:
+    connection().execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))

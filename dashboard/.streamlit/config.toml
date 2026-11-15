@@ -1,0 +1,34 @@
+[theme]
+base = "light"
+primaryColor = "#087f70"
+backgroundColor = "#f4f7f6"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#122521"
+borderColor = "#dfe8e5"
+linkColor = "#087f70"
+codeBackgroundColor = "#eef3f1"
+codeTextColor = "#46615b"
+greenColor = "#238760"
+redColor = "#bf4a4a"
+orangeColor = "#b66a14"
+blueColor = "#3c6f9e"
+grayColor = "#687a75"
+chartCategoricalColors = ["#087f70", "#3c6f9e", "#b66a14", "#bf4a4a", "#238760", "#687a75"]
+font = "DM Sans:https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap"
+headingFont = "Manrope:https://fonts.googleapis.com/css2?family=Manrope:wght@600;700&display=swap"
+baseFontSize = 14
+headingFontSizes = ["28px", "23px", "17px", "15px", "14px", "12px"]
+headingFontWeights = [700, 700, 700, 600, 600, 600]
+baseRadius = "12px"
+buttonRadius = "10px"
+linkUnderline = false
+showSidebarBorder = false
+
+[theme.sidebar]
+backgroundColor = "#0c2927"
+secondaryBackgroundColor = "#163a36"
+textColor = "#cfe0dc"
+borderColor = "#1d4a45"
+primaryColor = "#53c9aa"
+codeBackgroundColor = "#163a36"
+codeTextColor = "#e6eeea"
