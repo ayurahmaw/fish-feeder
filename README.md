@@ -101,8 +101,10 @@ Catatan Cloud:
   dashboard tetap tampil (data awal `feeder01` di-seed otomatis). Tapi device
   luar **tidak bisa** connect ke broker di dalam Cloud.
 - Agar `sim.js` / ESP32 bisa mengirim data, set `EMBED_BROKER="false"` dan arahkan
-  `MQTT_URL` ke broker yang bisa diakses publik (mis. `broker.hivemq.com`),
-  lalu samakan `MQTT_TOPIC_PREFIX` di device.
+  `MQTT_URL` ke broker yang bisa diakses publik. `sim.js` dan firmware sekarang
+  default ke `broker.hivemq.com:1883` dengan prefix `feeder` (samakan dengan
+  `MQTT_TOPIC_PREFIX` di Cloud secrets). Device tidak connect ke URL Streamlit —
+  Cloud tidak bisa menerima koneksi MQTT masuk.
 - Filesystem Cloud bersifat sementara: `feeder.db` dibuat ulang dan di-seed
   setiap restart/redeploy.
 

@@ -12,18 +12,22 @@
 
 const mqtt = require('/Users/macbookpro/.nvm/versions/node/v22.23.2/lib/node_modules/node-red/node_modules/mqtt');
 
+// The deployed app (fish-feeder-upph.streamlit.app) cannot host an inbound MQTT
+// broker, so the app and the device both connect to a public broker instead.
+// Keep broker/prefix in sync with the app's Cloud secrets.
 const CFG = {
-  broker:  'mqtt://localhost:1883',
+  broker:  process.env.MQTT_URL || 'mqtt://broker.hivemq.com:1883',
+  prefix:  process.env.MQTT_TOPIC_PREFIX || 'feeder',
   deviceId: 'feeder01',             // sinkron dengan seed database (devices.device_code)
   intervalMs: 3000,
 };
 
 // --- Topic tree (matches the autofeeder design; topics are stable identifiers) ---
 const T = {
-  telemetry: `feeder/${CFG.deviceId}/telemetry`,   // device -> platform (periodic)
-  command:   `feeder/${CFG.deviceId}/command`,     // platform -> device (manual feed etc.)
-  ack:       `feeder/${CFG.deviceId}/ack`,         // device -> platform (command reply)
-  status:    `feeder/${CFG.deviceId}/status`,      // LWT + birth (online/offline)
+  telemetry: `${CFG.prefix}/${CFG.deviceId}/telemetry`,   // device -> platform (periodic)
+  command:   `${CFG.prefix}/${CFG.deviceId}/command`,     // platform -> device (manual feed etc.)
+  ack:       `${CFG.prefix}/${CFG.deviceId}/ack`,         // device -> platform (command reply)
+  status:    `${CFG.prefix}/${CFG.deviceId}/status`,      // LWT + birth (online/offline)
 };
 
 let feedLevel = 80;   // % remaining, sim value
