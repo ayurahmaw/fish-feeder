@@ -257,6 +257,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "device_sync": {"id": "Sinkronisasi perangkat", "en": "Device sync"},
     "synced": {"id": "Tersinkron", "en": "Synced"},
     "changes_pending": {"id": "Ada perubahan", "en": "Changes pending"},
+    "waiting_device": {"id": "Menunggu perangkat", "en": "Waiting for device"},
     "send_to_device": {"id": "Kirim ke perangkat", "en": "Send to device"},
     "sending": {"id": "Mengirim...", "en": "Sending..."},
     "daily_schedules": {"id": "Jadwal harian", "en": "Daily schedules"},

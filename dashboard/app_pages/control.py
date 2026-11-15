@@ -53,8 +53,7 @@ with row_one[1]:
         second.caption(t("sensor_distance"))
         second.markdown(f"**{ui.num(status.get('distance_cm'))} cm**")
         third.caption(t("last_seen"))
-        age = ui.seconds_since(status.get("measured_at"))
-        third.markdown(f"**{age if age is not None else '—'} {t('seconds_short')}**")
+        third.markdown(f"**{ui.fmt_datetime(status.get('measured_at'))}**")
         if st.button(
             t("request_fresh"),
             icon=":material/refresh:",

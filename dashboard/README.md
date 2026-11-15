@@ -65,8 +65,8 @@ Yang penting:
 | **Status** | Level hopper, empat metric (jarak, state, koneksi, terakhir terlihat), jadwal berikutnya, aktivitas pakan terakhir, aksi cepat |
 | **Live** | Grafik telemetry 1/6/24 jam + ambang, daftar pesan MQTT terbaru (filter + jeda) |
 | **Notifikasi** | Ringkasan belum dibaca/peringatan/kritis, filter, tandai dibaca per item atau semua |
-| **Riwayat** | Riwayat pakan 1/7/30 hari, ringkasan sukses/gagal/porsi, filter status |
-| **Jadwal** | Tambah/ubah/hapus jadwal, aktif–nonaktif, indikator perubahan, kirim `set_schedule` |
+| **Riwayat** | Riwayat pakan 7 hari terakhir, ringkasan sukses/gagal/porsi, filter status |
+| **Jadwal** | Tambah/ubah/hapus jadwal, aktif–nonaktif, status sinkronisasi mengikuti status device, kirim `set_schedule` |
 | **Kontrol** | `manual_feed` (dengan konfirmasi), `get_state`, `set_threshold`, `set_rtc`, log perintah |
 
 Halaman Status dan Live menyegarkan diri tiap 2 detik (`st.fragment`); halaman

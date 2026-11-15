@@ -93,45 +93,58 @@ def delete_schedule(item: dict) -> None:
         st.rerun()
 
 
-rows = data.schedules(device["id"])
-active = [row for row in rows if row["is_active"]]
-upcoming = ui.next_run(active)
-next_text = upcoming[0].strftime("%H:%M") if upcoming else "—"
-dirty = bool(st.session_state.get("schedule_dirty", False))
+@st.fragment(run_every="2s")
+def render_overview() -> None:
+    """Sync state follows the device: offline, pending changes, or synced."""
+    status = data.status_of(device["id"]) or {}
+    online = bool(status.get("is_online"))
+    schedules = data.schedules(device["id"])
+    active = [row for row in schedules if row["is_active"]]
+    upcoming = ui.next_run(active)
+    next_text = upcoming[0].strftime("%H:%M") if upcoming else "—"
+    dirty = bool(st.session_state.get("schedule_dirty", False))
 
-with st.container(border=True):
-    first, second, third, fourth = st.columns(
-        [1, 1, 1.4, 1.6], vertical_alignment="center"
-    )
-    first.metric(t("active_schedules"), len(active))
-    second.metric(t("next_feeding"), next_text)
-    with third:
-        st.caption(t("device_sync"))
-        ui.badge(
-            t("changes_pending") if dirty else t("synced"),
-            "warning" if dirty else "healthy",
+    with st.container(border=True):
+        first, second, third, fourth = st.columns(
+            [1, 1, 1.4, 1.6], vertical_alignment="center"
         )
-    with fourth:
-        with st.container(horizontal=True, horizontal_alignment="right"):
-            if st.button(
-                t("send_to_device"),
-                type="primary",
-                icon=":material/send:",
-                disabled=not active,
-                key="send_schedules",
-            ):
-                try:
-                    result = client_command(
-                        device,
-                        "set_schedule",
-                        {"schedules": db.active_schedules(device["id"])},
-                    )
-                except Exception as exc:
-                    notify_failure(exc)
-                else:
-                    st.session_state["schedule_dirty"] = False
-                    notify_command(result, "schedule_sent")
-                st.rerun()
+        first.metric(t("active_schedules"), len(active))
+        second.metric(t("next_feeding"), next_text)
+        with third:
+            st.caption(t("device_sync"))
+            if not online:
+                ui.badge(t("offline"), "critical")
+                st.caption(t("waiting_device"))
+            elif dirty:
+                ui.badge(t("changes_pending"), "warning")
+            else:
+                ui.badge(t("synced"), "healthy")
+        with fourth:
+            with st.container(horizontal=True, horizontal_alignment="right"):
+                if st.button(
+                    t("send_to_device"),
+                    type="primary",
+                    icon=":material/send:",
+                    disabled=not active or not online,
+                    key="send_schedules",
+                ):
+                    try:
+                        result = client_command(
+                            device,
+                            "set_schedule",
+                            {"schedules": db.active_schedules(device["id"])},
+                        )
+                    except Exception as exc:
+                        notify_failure(exc)
+                    else:
+                        st.session_state["schedule_dirty"] = False
+                        notify_command(result, "schedule_sent")
+                    st.rerun()
+
+
+render_overview()
+
+rows = data.schedules(device["id"])
 
 with st.container(border=True):
     head_left, head_right = st.columns([3, 1], vertical_alignment="center")

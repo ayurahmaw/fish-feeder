@@ -139,6 +139,12 @@ def fmt_when(value) -> str:
     return f"{prefix}, {local:%H:%M}"
 
 
+def fmt_datetime(value) -> str:
+    """Absolute local date-time, e.g. 20/10/2026 20:12."""
+    moment = parse_ts(value)
+    return moment.astimezone().strftime("%d/%m/%Y %H:%M") if moment else "—"
+
+
 def duration_text(seconds: int | None) -> str:
     if seconds is None:
         return "—"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pandas as pd
 import streamlit as st
@@ -28,31 +28,11 @@ def render() -> None:
     schedules = data.schedules(device["id"])
     active = [item for item in schedules if item["is_active"]]
     upcoming = ui.next_run(active)
-    next_time = upcoming[0].strftime("%H:%M") if upcoming else "—"
-
-    if status["is_empty"]:
-        headline = t("welcome_empty")
-        sub = t("welcome_no_schedule")
-    elif status["is_low"]:
-        headline = t("welcome_low")
-        sub = t("welcome_sub", time=next_time) if upcoming else t("welcome_no_schedule")
-    else:
-        headline = t("welcome_ok")
-        sub = t("welcome_sub", time=next_time) if upcoming else t("welcome_no_schedule")
-
-    head_left, head_right = st.columns([3, 1], vertical_alignment="bottom")
-    with head_left:
-        st.caption(t("welcome_eyebrow"))
-        st.subheader(headline)
-        st.caption(sub)
-    head_right.caption(f"{t('updated')} {datetime.now():%H:%M}")
 
     if status["is_empty"]:
         st.error(t("welcome_empty"), icon=":material/error:")
     elif status["is_low"]:
         st.warning(t("welcome_low"), icon=":material/warning:")
-    else:
-        st.success(t("welcome_ok"), icon=":material/check_circle:")
 
     rows = data.telemetry(
         device["id"], data.sql_stamp(data.sql_now() - timedelta(days=7))
@@ -113,11 +93,10 @@ def render() -> None:
                 t("signal_stable"),
             )
         with fourth:
-            age = ui.seconds_since(status["measured_at"])
             ui.metric_card(
                 "schedule",
                 t("last_seen"),
-                f"{age if age is not None else '—'} {t('seconds_short')}",
+                ui.fmt_datetime(status["measured_at"]),
                 t("latest_telemetry"),
             )
 
@@ -159,9 +138,6 @@ def render() -> None:
                     f"{ui.fmt_when(latest['requested_at'])} · "
                     f"{latest['portions']} {t('portions')}"
                 )
-                before, after = st.columns(2)
-                before.metric(t("before"), ui.level_text(latest["feed_level_before_pct"]))
-                after.metric(t("after"), ui.level_text(latest["feed_level_after_pct"]))
             else:
                 st.caption(t("no_feeding_yet"))
 

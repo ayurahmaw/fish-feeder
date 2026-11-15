@@ -12,18 +12,10 @@ import ui
 from i18n import status_label, t
 
 device = st.session_state["device"]
+DAYS = 7
 
 with st.container(border=True):
-    range_col, status_col = st.columns([3, 2], vertical_alignment="center")
-    days = range_col.segmented_control(
-        t("range"),
-        options=[1, 7, 30],
-        default=7,
-        required=True,
-        key="history_days",
-        label_visibility="collapsed",
-        format_func=lambda value: f"{value} " + (t("day") if value == 1 else t("days")),
-    ) or 7
+    _, status_col = st.columns([3, 2], vertical_alignment="center")
     selected = status_col.selectbox(
         t("status_col"),
         ["all", "success", "failed"],
@@ -35,7 +27,7 @@ with st.container(border=True):
 now = data.sql_now()
 rows = data.feeding_logs(
     device["id"],
-    data.sql_stamp(now - timedelta(days=int(days))),
+    data.sql_stamp(now - timedelta(days=DAYS)),
     data.sql_stamp(now),
 )
 visible = [
@@ -54,7 +46,7 @@ c4.metric(t("total_portions"), portions, border=True, icon=":material/bolt:")
 
 with st.container(border=True):
     st.subheader(t("feeding_history"))
-    st.caption(t("history_sub", days=int(days)))
+    st.caption(t("history_sub", days=DAYS))
 
     if not visible:
         ui.empty_state("history", t("no_history"), t("no_history"))
