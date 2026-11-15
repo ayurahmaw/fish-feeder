@@ -1,0 +1,2 @@
+# System packages installed by Streamlit Community Cloud (apt).
+# Empty on purpose: the app needs no system libraries.

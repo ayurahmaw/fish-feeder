@@ -75,6 +75,9 @@ firmware/esp32_feeder/secrets.h
 __pycache__/
 *.py[cod]
 
+# Streamlit secrets (local; Cloud secrets are set in the dashboard UI)
+.streamlit/secrets.toml
+
 # SQLite database (created at runtime)
 *.db
 *.db-wal

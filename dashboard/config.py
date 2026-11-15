@@ -17,6 +17,33 @@ BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def _load_streamlit_secrets() -> None:
+    """Expose Streamlit Cloud secrets as environment variables.
+
+    Locally the settings come from ``.env``; on Streamlit Community Cloud there
+    is no ``.env``, so the same keys are supplied through the app's Secrets
+    panel. Existing environment variables always win.
+    """
+    try:
+        import streamlit as st
+
+        secrets = st.secrets.to_dict()
+    except Exception:
+        return
+
+    def apply(mapping) -> None:
+        for key, value in mapping.items():
+            if isinstance(value, dict):
+                apply(value)
+            elif isinstance(value, (str, int, float, bool)):
+                os.environ.setdefault(str(key), str(value))
+
+    apply(secrets)
+
+
+_load_streamlit_secrets()
+
+
 def _num(value, default):
     if value is None or value == "":
         return default

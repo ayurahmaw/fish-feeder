@@ -1,0 +1,9 @@
+# Dependencies for Streamlit Community Cloud.
+# Cloud ignores Pipfile; it installs from this file at the repository root.
+# Python: pick 3.12 or 3.13 in the Cloud "Advanced settings" dialog.
+
+streamlit>=1.50
+paho-mqtt>=2.1
+amqtt>=0.12
+pandas>=2.2
+python-dotenv>=1.0

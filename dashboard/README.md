@@ -24,6 +24,19 @@ pipenv shell
 python run.py           # → http://localhost:8501
 ```
 
+### Deploy ke Streamlit Community Cloud
+
+Cloud menjalankan `streamlit run <main file>` dari root repo, bukan `run.py`
+(jadi broker/worker baru menyala saat halaman pertama dibuka — tetap berfungsi).
+
+- Main file path: **`dashboard/app.py`**
+- Python: **3.12 / 3.13**
+- Dependensi: `requirements.txt` di root repo (bukan `Pipfile`)
+- Konfigurasi: panel **Secrets** (contoh: `.streamlit/secrets.toml.example`),
+  karena `.env` tidak ikut ter-deploy
+
+Detail langkah ada di README root bagian *Deploy ke Streamlit Community Cloud*.
+
 Lalu di terminal lain jalankan device simulator (butuh Node v22):
 
 ```bash

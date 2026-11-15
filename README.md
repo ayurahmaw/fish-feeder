@@ -73,6 +73,37 @@ Inspect the database directly (plain file, no server):
 sqlite3 dashboard/feeder.db "SELECT * FROM v_device_status;"
 ```
 
+## Deploy ke Streamlit Community Cloud
+
+Repo ini sudah disiapkan untuk Cloud:
+
+- `requirements.txt` (root) — dependensi. Cloud tidak membaca `Pipfile`.
+- `.streamlit/config.toml` (root) — tema, karena Cloud menjalankan app dengan
+  CWD di root repo.
+- `.streamlit/secrets.toml.example` — daftar secret yang bisa diisi lewat panel
+  **Secrets** di Cloud (tanpa `.env`).
+- `packages.txt` — kosong; tidak ada paket sistem yang dibutuhkan.
+
+Langkah:
+
+1. Push repo ke GitHub.
+2. Buka <https://share.streamlit.io> → **New app** → pilih repo & branch `main`.
+3. **Main file path**: `dashboard/app.py`.
+4. **Advanced settings** → Python **3.12** atau **3.13** (bukan 3.14).
+5. (Opsional) **Secrets** — tempel isi `.streamlit/secrets.toml.example`.
+6. **Deploy**.
+
+Catatan Cloud:
+
+- Default `EMBED_BROKER=true` aman: broker berjalan di dalam container dan
+  dashboard tetap tampil (data awal `feeder01` di-seed otomatis). Tapi device
+  luar **tidak bisa** connect ke broker di dalam Cloud.
+- Agar `sim.js` / ESP32 bisa mengirim data, set `EMBED_BROKER="false"` dan arahkan
+  `MQTT_URL` ke broker yang bisa diakses publik (mis. `broker.hivemq.com`),
+  lalu samakan `MQTT_TOPIC_PREFIX` di device.
+- Filesystem Cloud bersifat sementara: `feeder.db` dibuat ulang dan di-seed
+  setiap restart/redeploy.
+
 ## Docs
 
 **`CONTEXT.md` is the single source of truth** — the full PRD: requirements (FR/NFR), MQTT
