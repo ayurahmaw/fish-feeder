@@ -16,6 +16,8 @@ and monitoring, running entirely in one Python process before the real ESP32 fir
 - **`dashboard/`** — the whole platform: an embedded MQTT broker (`amqtt`), an MQTT worker that
   ingests device traffic, alert evaluation, ack correlation, the timeout sweeper, an embedded
   SQLite database, and the Streamlit monitoring/control UI.
+- **`firmware/esp32_feeder/`** — Arduino IDE sketch for the real device: HC-SR04 level sensing,
+  SG90 gate, DS3231 clock, LCD1602 status display, local schedules, full ACK coverage.
 - **`sim.js`** — stands in for the ESP32: stable client id, birth/LWT, periodic telemetry,
   feed-level tracking, manual-feed acks.
 - **`database/`** — SQLite schema + example queries.
@@ -25,10 +27,14 @@ There is **no external service**: no mosquitto, no MySQL. The broker and the dat
 inside the app process. (If port 1883 is already taken by a mosquitto you have running, the app
 detects it and uses that broker instead.)
 
-## MQTT topic tree (device namespace, `feeder01` = device ID)
+## MQTT topic tree (device namespace, `<device>` = `devices.device_code`)
+
+The ESP32 derives its device id from its factory MAC (`feeder-64008c`, printing
+`[id] device=…` at boot), so several boards can share one binary. `sim.js` still uses the
+seeded `feeder01`.
 
 ```
-feeder/<device>/state       device → platform  full state snapshot (schedule, RTC, feed level)
+feeder/<device>/state       device → platform  device-initiated events (scheduled_feed)
 feeder/<device>/telemetry   device → platform  periodic status ticks
 feeder/<device>/status      LWT: online/offline (retained)
 feeder/<device>/command     platform → device  all commands (manual feed, set schedule, sync RTC)
@@ -36,6 +42,8 @@ feeder/<device>/ack         device → platform  command acknowledgement
 ```
 
 Messages are JSON; every command carries a `command_id` so acks can be matched.
+The ESP32 runs the daily schedules itself and reports each execution on `state`, which is how
+scheduled feeds reach the History tab (see `CONTEXT.md` §10.6).
 Command types: `manual_feed`, `set_schedule`, `set_threshold`, `set_rtc`, `get_state`.
 See `CONTEXT.md` §10 for the full contract.
 

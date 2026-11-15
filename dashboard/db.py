@@ -259,6 +259,31 @@ def insert_feeding_log(
     return cur.lastrowid
 
 
+def insert_scheduled_feeding_log(
+    *,
+    device_id,
+    portions,
+    feed_time,
+    feed_level_before=None,
+    feed_level_after=None,
+):
+    """Device-initiated schedule execution: no command, already completed."""
+    cur = connection().execute(
+        "INSERT INTO feeding_logs "
+        "(device_id, command_id, trigger_type, portions, status, message, "
+        "feed_level_before_pct, feed_level_after_pct, completed_at) "
+        f"VALUES (?, NULL, 'scheduled', ?, 'success', ?, ?, ?, {NOW})",
+        (
+            device_id,
+            int(portions),
+            f"scheduled {feed_time}",
+            feed_level_before,
+            feed_level_after,
+        ),
+    )
+    return cur.lastrowid
+
+
 def apply_ack(*, command_id, ok, message) -> bool:
     conn = connection()
     with transaction():

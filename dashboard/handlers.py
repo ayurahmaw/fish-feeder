@@ -146,6 +146,43 @@ def handle_ack(device_code: str, payload: dict) -> None:
         log(f"command {command_id} -> FAILED ({message})")
 
 
+def handle_state(device_code: str, payload: dict) -> None:
+    """feeder/<device>/state — device-initiated events.
+
+    The ESP32 runs the daily schedules itself (no platform-side scheduler), so it
+    reports a completed scheduled feed here. ``distance_cm`` is measured after
+    the feed, which lets us fill in the "after" level while the latest telemetry
+    row still holds the "before" value.
+    """
+    device = db.ensure_device(device_code)
+    payload = payload or {}
+
+    if payload.get("event") != "scheduled_feed":
+        log(f"state dari {device_code} tanpa event dikenal — diabaikan")
+        return
+
+    distance_cm = _num_or_none(payload.get("distance_cm"))
+    pct_after = compute_pct(device, distance_cm) if distance_cm is not None else None
+    portions = int(_num_or_none(payload.get("portions")) or 1)
+    feed_time = str(payload.get("feed_time") or "")
+
+    latest = db.latest_telemetry(device["id"])
+    pct_before = latest["feed_level_pct"] if latest else None
+
+    db.insert_scheduled_feeding_log(
+        device_id=device["id"],
+        portions=portions,
+        feed_time=feed_time,
+        feed_level_before=pct_before,
+        feed_level_after=pct_after,
+    )
+    db.touch_device(device["id"], True)
+    log(
+        f"scheduled feed {device_code}: {portions} porsi @ {feed_time} "
+        f"({_fmt(pct_before)}% -> {_fmt(pct_after)}%)"
+    )
+
+
 def handle_status(device_code: str, payload) -> None:
     """feeder/<device>/status  ("online" / "offline", retained LWT/birth)"""
     device = db.ensure_device(device_code)

@@ -253,18 +253,19 @@ Pengujian dan analisis didasarkan pada parameter teknis IT. Target di bawah adal
 | Parameter | Nilai | Catatan |
 |---|---|---|
 | Broker | `mqtt://<IP-Mac-anda>:1883` | Broker MQTT di dalam aplikasi (default port `1883`) |
-| ClientId | `feeder01` | **Harus unik & stabil** — jangan dipakai 2 proses (bug nyata: sesi saling tendang) |
+| ClientId | `<device_id>` (= `devices.device_code`) | **Harus unik & stabil** — jangan dipakai 2 proses (bug nyata: sesi saling tendang). Firmware `firmware/esp32_feeder` menurunkannya dari MAC chip: `feeder-<6 hex>` (mis. `feeder-64008c`), jadi tiap board otomatis unik; `DEVICE_ID_OVERRIDE` bisa dipakai untuk memaksa nilai lain |
 | Keepalive | 60 s | |
-| LWT (Will) | topic `feeder/feeder01/status`, payload `offline`, **retain=true** | Otomatis terpublish broker saat device mati |
-| Saat connect | publish `online` ke `feeder/feeder01/status`, **retain=true** (birth) | Lalu subscribe command |
+| LWT (Will) | topic `feeder/<device_id>/status`, payload `offline`, **retain=true** | Otomatis terpublish broker saat device mati |
+| Saat connect | publish `online` ke `feeder/<device_id>/status`, **retain=true** (birth) | Lalu subscribe command |
 
-**Publish oleh device (3 topic):**
+**Publish oleh device (4 topic):**
 
 | Topic | Kapan | Format |
 |---|---|---|
 | `feeder/feeder01/status` | connect (birth) + LWT | string `online` / `offline` (bukan JSON) |
 | `feeder/feeder01/telemetry` | periodik 10–30 s | JSON (lihat §10.2) |
 | `feeder/feeder01/ack` | **wajib** balas tiap command | JSON (lihat §10.4) |
+| `feeder/feeder01/state` | setelah firmware mengeksekusi jadwal lokal | JSON event `scheduled_feed` (lihat §10.6) |
 
 **Subscribe oleh device (1 topic):**
 
@@ -339,6 +340,29 @@ Aturan:
 - [ ] **Echo `command_id`** di setiap ack, kirim untuk sukses MAUPUN gagal
 - [ ] State `feeding` saat motor jalan
 - [ ] Reconnect otomatis + publish birth ulang saat sambungan kembali
+- [ ] Publish event `scheduled_feed` setelah mengeksekusi jadwal lokal (lihat §10.6)
+
+### 10.6 Payload State / Event (device → platform)
+Topic `feeder/feeder01/state` dipakai device untuk melaporkan **kejadian yang dipicu device sendiri**.
+Saat ini hanya satu event: jadwal harian yang dieksekusi firmware (platform tidak punya scheduler).
+
+```json
+{
+  "event": "scheduled_feed",
+  "device": "feeder01",
+  "portions": 2,
+  "feed_time": "07:00:00",
+  "distance_cm": 12.4,
+  "ts": "2026-09-23T07:00:01Z"
+}
+```
+
+- `distance_cm` diukur **setelah** pemberian pakan → aplikasi memakainya sebagai `feed_level_after_pct`,
+  sedangkan `feed_level_before_pct` diambil dari baris telemetry terakhir.
+- Handler: `handlers.handle_state()` → INSERT `feeding_logs` dengan `trigger_type='scheduled'`,
+  `command_id = NULL`, `status='success'` → muncul di tab **History** sebagai "Terjadwal".
+- Event ini **tidak** butuh ack (tidak ada command yang dikorelasikan). Event lain di topic ini hanya
+  dicatat ke log, bukan ke database.
 
 ---
 

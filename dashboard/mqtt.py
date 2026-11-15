@@ -15,10 +15,10 @@ from datetime import datetime, timezone
 import paho.mqtt.client as mqtt
 
 import config
-from handlers import handle_ack, handle_status, handle_telemetry
+from handlers import handle_ack, handle_state, handle_status, handle_telemetry
 from log import log, log_err
 
-TOPIC_KINDS = ("telemetry", "ack", "status")
+TOPIC_KINDS = ("telemetry", "ack", "status", "state")
 
 
 def _ts() -> str:
@@ -101,6 +101,8 @@ class Worker:
                 handle_ack(device_code, parsed if isinstance(parsed, dict) else {})
             elif kind == "status":
                 handle_status(device_code, parsed)
+            elif kind == "state":
+                handle_state(device_code, parsed if isinstance(parsed, dict) else {})
         except Exception as exc:
             log_err(f"gagal memproses {msg.topic}: {exc}")
 

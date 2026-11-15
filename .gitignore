@@ -59,6 +59,16 @@ dkms.conf
 
 # Local tooling state (not project source)
 .commandcode/
+.agents/
+.claude/
+
+# Firmware credentials (copy secrets.h.example -> secrets.h)
+firmware/esp32_feeder/secrets.h
+
+# Stray local files
+.flows.json.backup
+/Pipfile
+/Pipfile.lock
 
 # Python / dashboard
 .venv/
