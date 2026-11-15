@@ -82,7 +82,9 @@ Repo ini sudah disiapkan untuk Cloud:
   CWD di root repo.
 - `.streamlit/secrets.toml.example` — daftar secret yang bisa diisi lewat panel
   **Secrets** di Cloud (tanpa `.env`).
-- `packages.txt` — kosong; tidak ada paket sistem yang dibutuhkan.
+- Tidak ada `packages.txt` — app tidak butuh paket sistem, dan Cloud
+  memperlakukan setiap baris file itu sebagai nama paket apt (komentar pun
+  dianggap paket).
 
 Langkah:
 
