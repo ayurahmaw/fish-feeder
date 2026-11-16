@@ -141,9 +141,11 @@ void begin(CommandHandler handler) {
 void tick() {
   if (WiFi.status() != WL_CONNECTED) {
     logWifiState();
-    if (client.connected()) {
-      client.disconnect();
-    }
+    // No clean DISCONNECT here: that packet cancels the will, leaving the
+    // retained "online" behind so the dashboard never sees the device go down.
+    // Let the TCP session die so the broker publishes the LWT; loop() still
+    // runs so PubSubClient notices the dead socket and reconnects afterwards.
+    client.loop();
     return;
   }
   if (!client.connected()) {

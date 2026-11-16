@@ -67,14 +67,14 @@
 #define SERVO_CLOSED_DEG 0
 #define SERVO_OPEN_DEG 90
 #define SERVO_SETTLE_MS 300
-#define PORTION_OPEN_MS 400
+#define PORTION_OPEN_MS 1000
 #define PORTION_GAP_MS 200
 
 // ===========================================================================
 // Hopper calibration — keep in sync with the devices table
 // ===========================================================================
 #define HOPPER_FULL_CM 5.0f
-#define HOPPER_EMPTY_CM 25.0f
+#define HOPPER_EMPTY_CM 20.0f
 #define MAX_DISTANCE_CM 40.0f
 
 // ===========================================================================

@@ -25,7 +25,6 @@ bool ramClockSet = false;
 int64_t ramEpoch = 0;
 uint32_t ramBaseMs = 0;
 
-String shownLine[2];
 uint8_t page = 0;
 uint32_t pageAt = 0;
 
@@ -96,12 +95,13 @@ String pad16(const String &text) {
 }
 
 void drawLine(uint8_t row, const String &text) {
-  if (lcd == nullptr || shownLine[row] == text) {
+  if (lcd == nullptr) {
     return;
   }
+  // Redraw every tick: an I2C glitch (servo current spike) corrupts the
+  // display until the next write, so the text must not be cached.
   lcd->setCursor(0, row);
   lcd->print(pad16(text));
-  shownLine[row] = text;
 }
 
 void detectI2c() {
@@ -289,8 +289,6 @@ void displaySplash(const char *line1, const char *line2) {
     return;
   }
   lcd->clear();
-  shownLine[0] = "";
-  shownLine[1] = "";
   drawLine(0, line1);
   drawLine(1, line2);
 }
