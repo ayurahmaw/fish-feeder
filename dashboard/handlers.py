@@ -106,6 +106,7 @@ def handle_telemetry(device_code: str, payload: dict) -> None:
         state=state,
     )
     db.touch_device(device["id"], True)
+    db.resolve_notifications(device["id"], ["device_offline"])
     evaluate_feed_alerts(device, feed_level_pct)
 
     log(

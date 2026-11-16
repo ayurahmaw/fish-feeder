@@ -146,6 +146,32 @@ def touch_device(device_id: int, online: bool) -> None:
     )
 
 
+def mark_stale_devices_offline(timeout_sec) -> list[str]:
+    """Flag devices that have stopped reporting and raise the offline alert."""
+    rows = connection().execute(
+        "SELECT id, device_code FROM devices WHERE is_online = 1 "
+        "AND (last_seen_at IS NULL OR last_seen_at < "
+        "     strftime('%Y-%m-%d %H:%M:%f','now', ?))",
+        (f"-{int(timeout_sec)} seconds",),
+    ).fetchall()
+    for row in rows:
+        connection().execute(
+            f"UPDATE devices SET is_online = 0, updated_at = {NOW} WHERE id = ?",
+            (row["id"],),
+        )
+        if not has_open_notification(row["id"], "device_offline"):
+            insert_notification(
+                device_id=row["id"],
+                type_="device_offline",
+                severity="warning",
+                title="Perangkat offline",
+                message=(
+                    f"{row['device_code']} tidak mengirim data > {int(timeout_sec)} s."
+                ),
+            )
+    return [row["device_code"] for row in rows]
+
+
 def list_devices():
     rows = connection().execute(
         "SELECT id, device_code, name, location, is_online, "

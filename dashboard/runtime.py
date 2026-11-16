@@ -50,6 +50,13 @@ def _start_sweeper(stop_event: threading.Event) -> threading.Thread:
                         f"{stale} perintah ditandai timeout "
                         f"(> {config.COMMAND_TIMEOUT_SEC}s tanpa ack)"
                     )
+                for device_code in db.mark_stale_devices_offline(
+                    config.DEVICE_OFFLINE_SEC
+                ):
+                    log(
+                        f"{device_code} ditandai offline "
+                        f"(> {config.DEVICE_OFFLINE_SEC}s tanpa data)"
+                    )
             except Exception as exc:
                 log_err("sweep error:", exc)
 

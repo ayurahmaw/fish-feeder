@@ -86,6 +86,13 @@ SCHEMA_PATH = Path(
 COMMAND_TIMEOUT_SEC = _num(os.getenv("COMMAND_TIMEOUT_SEC"), 30)
 SWEEP_INTERVAL_MS = _num(os.getenv("SWEEP_INTERVAL_MS"), 10_000)
 
+# --- Devices ----------------------------------------------------------------
+# The embedded broker never times out a silent client (amqtt's broker keepalive
+# handler is a no-op), so a device that dies without closing its socket would
+# stay "online" forever. The sweeper flags it after this many seconds without
+# telemetry (the firmware reports every 15 s).
+DEVICE_OFFLINE_SEC = _num(os.getenv("DEVICE_OFFLINE_SEC"), 45)
+
 # --- UI ---------------------------------------------------------------------
 LIVE_TAIL_SIZE = _num(os.getenv("LIVE_TAIL_SIZE"), 200)
 
