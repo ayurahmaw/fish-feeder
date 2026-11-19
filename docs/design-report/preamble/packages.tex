@@ -1,0 +1,110 @@
+% Paket & pengaturan global. Dimuat oleh main-standalone.tex / main-appendix.tex.
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{textcomp}
+
+\usepackage[english,indonesian]{babel}
+
+\usepackage[a4paper,margin=2.5cm,headheight=15pt,footskip=1.2cm]{geometry}
+
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{adjustbox}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{needspace}
+\usepackage{setspace}
+\usepackage{tocloft}
+\usepackage{pdflscape}
+\usepackage{etoolbox}
+\usepackage{xstring}
+
+% --- TikZ & friends --------------------------------------------------------
+\usepackage{tikz}
+\usetikzlibrary{
+  babel,            % wajib: babel indonesian mengaktifkan ; : ! sebagai shorthand
+  arrows.meta, positioning, shapes.geometric, shapes.misc, shapes.arrows,
+  fit, backgrounds, calc, decorations.pathreplacing, patterns, chains
+}
+\usepackage{circuitikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% --- Tampilan --------------------------------------------------------------
+\captionsetup{
+  font=small, labelfont={bf,color=accent}, labelsep=period,
+  justification=raggedright, singlelinecheck=false, skip=6pt
+}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\onehalfspacing
+
+\titleformat{\chapter}[hang]
+  {\normalfont\LARGE\bfseries\color{navy}}
+  {\thechapter.}{0.6em}{}
+\titlespacing*{\chapter}{0pt}{-10pt}{18pt}
+\titleformat{\section}{\normalfont\large\bfseries\color{navy}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries\color{ink}}{\thesubsection}{0.6em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize\color{muted}\nouppercase{\leftmark}}
+\fancyhead[R]{\footnotesize\color{muted}\reporttitle}
+\fancyfoot[C]{\footnotesize\color{muted}\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\headrule}{\color{accentMid}\hrule width\headwidth height\headrulewidth}
+
+% --- Kode ------------------------------------------------------------------
+\lstdefinestyle{report}{
+  backgroundcolor=\color{codeBg},
+  basicstyle=\ttfamily\footnotesize\color{ink},
+  keywordstyle=\color{accent}\bfseries,
+  commentstyle=\color{muted}\itshape,
+  stringstyle=\color{warn},
+  numbers=none, frame=single, rulecolor=\color{accentMid},
+  framesep=5pt, xleftmargin=6pt, xrightmargin=6pt,
+  breaklines=true, breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{muted}{$\hookrightarrow$}\space},
+  columns=fullflexible, keepspaces=true, showstringspaces=false,
+  aboveskip=8pt, belowskip=8pt
+}
+\lstset{style=report}
+
+% --- Kotak catatan ---------------------------------------------------------
+\newtcolorbox{notebox}[1][]{
+  colback=accentLight, colframe=accent, boxrule=0.4pt, arc=2pt,
+  left=8pt, right=8pt, top=6pt, bottom=6pt,
+  fonttitle=\bfseries\small, title={Catatan}, #1
+}
+\newtcolorbox{warnbox}[1][]{
+  colback=warnBg, colframe=warn, boxrule=0.4pt, arc=2pt,
+  left=8pt, right=8pt, top=6pt, bottom=6pt,
+  fonttitle=\bfseries\small, title={Peringatan}, #1
+}
+
+% --- Hyperref (paling akhir) -----------------------------------------------
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=accent,
+  citecolor=accent,
+  urlcolor=accent,
+  filecolor=accent,
+  bookmarksnumbered=true,
+  bookmarksopen=true
+}
+\usepackage{bookmark}

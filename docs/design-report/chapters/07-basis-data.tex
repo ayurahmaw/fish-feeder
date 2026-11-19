@@ -1,0 +1,258 @@
+\chapter{Basis Data}
+\label{ch:07-basis-data}
+
+\section{Engine dan Keputusan Desain}
+
+Basis data sistem ini adalah SQLite yang berjalan di dalam proses aplikasi, dengan
+berkas tunggal \code{\DbFile}. Tidak ada server basis data terpisah dan tidak ada
+layanan yang harus dinyalakan lebih dahulu. Pilihan itu diambil karena server
+mandiri seperti MySQL memerlukan proses terpisah, sedangkan SQLite dapat dimuat
+sebagai pustaka di dalam proses Python yang juga menjalankan broker, worker, dan
+dashboard.
+
+Skema pada \file{database/schema.sql} berisi \NumTables{} tabel dan satu view
+agregat, dan seluruh definisinya idempoten sehingga dapat dijalankan pada basis data
+kosong maupun yang sudah terisi. Tiga penerjemahan dari dialek server ke SQLite
+dipakai konsisten: enum diganti kolom teks dengan \code{CHECK}, JSON diganti kolom
+teks dengan \code{json_valid()}, dan waktu berpresisi milidetik diganti kolom teks
+yang diisi \code{strftime}. Seluruh waktu disimpan dalam UTC dan dikonversi ke waktu
+lokal di lapisan aplikasi.
+
+Konkurensi ditangani dengan tiga pengaturan pada setiap koneksi: mode jurnal WAL
+agar satu penulis dan banyak pembaca dapat bekerja bersamaan, \code{busy_timeout}
+lima detik agar penulis menunggu alih-alih langsung gagal, dan \code{foreign_keys}
+yang diaktifkan eksplisit karena SQLite mematikannya secara bawaan. Setiap thread
+memakai koneksi sendiri, dan operasi yang menulis lebih dari satu baris dibungkus
+\code{BEGIN IMMEDIATE}. (\file{dashboard/db.py})
+
+\section{Diagram Relasi}
+
+\figref{fig:db-er} memuat diagram relasi antar entitas, sedangkan
+\figref{fig:db-relational-schema} menampilkan skema relasional dengan kunci primer,
+kunci asing, dan index. Yang pertama dipakai untuk memahami kardinalitas, yang kedua
+untuk memeriksa kolom.
+
+\figureasset[\linewidth]{db-er}{Diagram relasi entitas: perangkat sebagai pusat, dengan
+telemetri, jadwal, perintah, riwayat pakan, dan notifikasi sebagai entitas
+turunan.}{fig:db-er}
+
+\figuretikz[\linewidth]{db-relational-schema}{Skema relasional basis data: \NumTables{} tabel,
+kunci primer, kunci asing, dan index.}{fig:db-relational-schema}
+
+\section{Kamus Data}
+
+\tabref{tab:07-kamus} memuat seluruh kolom pada keenam tabel. Kolom ``Constraint''
+menuliskan batasan tingkat basis data, bukan aturan yang ditegakkan kode aplikasi;
+aturan yang hanya ada di kode dibahas pada bagian terakhir bab ini.
+
+{\scriptsize
+\begin{longtable}{@{}p{2.1cm}p{3.8cm}p{1.5cm}p{2.5cm}p{4.1cm}@{}}
+\caption{Kamus data basis data.}
+\label{tab:07-kamus} \\
+\toprule
+\textbf{Tabel} & \textbf{Kolom} & \textbf{Tipe} & \textbf{Constraint} &
+\textbf{Keterangan} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Tabel} & \textbf{Kolom} & \textbf{Tipe} & \textbf{Constraint} &
+\textbf{Keterangan} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+devices & id & INTEGER & primary key & Kunci utama. \\
+ & \code{device_code} & TEXT & not null, unik & Kode perangkat, segmen topik MQTT. \\
+ & name & TEXT & not null & Nama tampilan. \\
+ & location & TEXT & boleh null & Lokasi penempatan. \\
+ & timezone & TEXT & not null, bawaan Asia/Jakarta & Zona untuk menyetel RTC. \\
+ & \code{sensor_full_cm} & REAL & not null, bawaan \HopperFull & Jarak saat hopper
+penuh. \\
+ & \code{sensor_empty_cm} & REAL & not null, bawaan \HopperEmpty & Jarak saat hopper
+kosong. \\
+ & \code{low_feed_threshold_pct} & INTEGER & 0 sampai 100, bawaan \DefaultThreshold
+& Ambang pakan menipis. \\
+ & \code{is_online} & INTEGER & not null, 0 atau 1 & Dari topik status. \\
+ & \code{last_seen_at} & TEXT & boleh null & Waktu data terakhir. \\
+ & \code{created_at}, \code{updated_at} & TEXT & not null, waktu sekarang & Diisi
+kode. \\
+\midrule
+telemetry & id & INTEGER & primary key & Kunci utama. \\
+ & \code{device_id} & INTEGER & kunci asing, cascade & Menunjuk ke \code{devices}. \\
+ & \code{distance_cm} & REAL & boleh null & Jarak mentah sensor. \\
+ & \code{feed_level_pct} & REAL & boleh null & Persentase sisa pakan. \\
+ & state & TEXT & boleh null & \code{idle}, \code{feeding}, \code{error}. \\
+ & \code{recorded_at} & TEXT & not null & Waktu baris masuk. \\
+\midrule
+schedules & id & INTEGER & primary key & Kunci utama. \\
+ & \code{device_id} & INTEGER & kunci asing, cascade & Menunjuk ke \code{devices}. \\
+ & name & TEXT & not null & Nama jadwal. \\
+ & \code{feed_time} & TEXT & not null & Jam pemberian, misalnya 07:00:00. \\
+ & portions & INTEGER & not null, bawaan 1 & Porsi per eksekusi. \\
+ & \code{is_active} & INTEGER & not null, 0 atau 1 & Hanya jadwal aktif yang dikirim. \\
+ & \code{created_at}, \code{updated_at} & TEXT & not null & Waktu pembuatan dan
+perubahan. \\
+\midrule
+commands & id & INTEGER & primary key & Kunci utama. \\
+ & \code{command_id} & TEXT & not null, unik & Pengenal dari payload. \\
+ & \code{device_id} & INTEGER & kunci asing, cascade & Menunjuk ke \code{devices}. \\
+ & type & TEXT & not null, enam nilai & Enam tipe pada \chapref{ch:06-protokol-mqtt}. \\
+ & payload & TEXT & harus JSON valid & Payload apa adanya. \\
+ & status & TEXT & bawaan pending & \code{sent}, \code{success}, \code{failed},
+\code{timeout}. \\
+ & \code{result_message} & TEXT & boleh null & Pesan dari ack. \\
+ & \code{created_at} & TEXT & not null & Waktu perintah dibuat. \\
+ & \code{acked_at} & TEXT & boleh null & Waktu ack diterima. \\
+\midrule
+\code{feeding_logs} & id & INTEGER & primary key & Kunci utama. \\
+ & \code{device_id} & INTEGER & kunci asing, cascade & Menunjuk ke \code{devices}. \\
+ & \code{command_id} & TEXT & boleh null & Korelasi perintah; null untuk jadwal. \\
+ & \code{trigger_type} & TEXT & \code{manual} atau \code{scheduled} & Pemicu
+pemberian pakan. \\
+ & \code{schedule_id} & INTEGER & kunci asing, set null & Selalu null saat runtime. \\
+ & portions & INTEGER & not null, bawaan 1 & Jumlah porsi. \\
+ & status & TEXT & bawaan pending & \code{pending}, \code{success}, \code{failed}. \\
+ & message & TEXT & boleh null & Pesan hasil dari ack. \\
+ & \code{distance_before_cm}, \code{distance_after_cm} & REAL & boleh null & Jarak
+sebelum dan sesudah. \\
+ & \code{feed_level_before_pct}, \code{feed_level_after_pct} & REAL & boleh null &
+Persentase sebelum dan sesudah. \\
+ & \code{requested_at} & TEXT & not null & Waktu permintaan. \\
+ & \code{completed_at} & TEXT & boleh null & Waktu selesai. \\
+\midrule
+notifications & id & INTEGER & primary key & Kunci utama. \\
+ & \code{device_id} & INTEGER & kunci asing, cascade & Menunjuk ke \code{devices}. \\
+ & type & TEXT & not null, empat nilai & \code{feed_low}, \code{feed_empty},
+\code{feed_failed}, \code{device_offline}. \\
+ & severity & TEXT & bawaan warning & \code{info}, \code{warning},
+\code{critical}. \\
+ & title & TEXT & boleh null & Judul singkat. \\
+ & message & TEXT & not null & Uraian kejadian. \\
+ & \code{feed_level_pct} & REAL & boleh null & Level saat notifikasi dibuat. \\
+ & \code{is_read} & INTEGER & not null, 0 atau 1 & Penanda sudah dibaca. \\
+ & \code{created_at} & TEXT & not null & Waktu notifikasi dibuat. \\
+\end{longtable}
+}
+
+\src{database/schema.sql}
+
+\section{Index dan Batasan Unik}
+
+\tabref{tab:07-index} memuat index eksplisit beserta alasannya. Selain itu ada dua
+batasan unik yang otomatis dibuatkan index oleh SQLite, yaitu pada
+\code{devices.device_code} dan \code{commands.command_id}. Keduanya bukan sekadar
+validasi: \code{device_code} adalah identitas perangkat pada topik MQTT, dan
+\code{command_id} adalah kunci korelasi ack sehingga duplikat harus ditolak pada
+tingkat basis data.
+
+\begin{table}[H]
+\centering
+\caption{Index eksplisit pada basis data.}
+\label{tab:07-index}
+\scriptsize
+\begin{tabular}{@{}p{5.0cm}p{1.9cm}p{2.3cm}p{4.6cm}@{}}
+\toprule
+\textbf{Index} & \textbf{Tabel} & \textbf{Kolom} & \textbf{Alasan} \\
+\midrule
+\code{idx_telemetry_device_time} & telemetry & device, waktu & Grafik rentang waktu
+dan baris terakhir. \\
+\code{idx_schedules_device_active} & schedules & device, aktif, jam & Daftar jadwal
+aktif terurut jam. \\
+\code{idx_commands_device_time} & commands & device, waktu & Aktivitas terakhir dan
+sapuan timeout. \\
+\code{idx_feeding_device_time} & \code{feeding_logs} & device, waktu & Riwayat pakan
+per periode. \\
+\code{idx_feeding_status} & \code{feeding_logs} & status & Riwayat yang belum
+selesai. \\
+\code{idx_notifications_device} & notifications & device, dibaca, waktu & Notifikasi
+belum dibaca. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{View Agregat}
+
+View \code{v_device_status} menyatukan satu baris perangkat dengan baris telemetri
+terbarunya; baris terbaru dipilih dengan fungsi jendela \code{ROW_NUMBER} yang
+diurutkan menurun menurut waktu catat dan nomor baris, sehingga dua baris bercap
+waktu sama tidak menghasilkan duplikat. View ini juga menghitung dua penanda yang
+dipakai dashboard: \code{is_empty} bernilai 1 bila persentase nol atau kurang dan
+null bila persentase belum diketahui, sedangkan \code{is_low} bernilai 1 bila
+persentase di atas nol tetapi tidak lebih dari ambang perangkat. Pembedaan ``belum
+diketahui'' dan ``kosong'' dipertahankan dengan sengaja: perangkat yang sensornya
+rusak mengirim telemetri tanpa persentase, dan view tidak boleh melaporkannya
+sebagai hopper kosong. Agregat ini tidak disimpan sebagai tabel agar tidak ada
+salinan yang dapat menyimpang dari data aslinya.
+
+\section{Data Awal}
+
+Basis data baru diisi dua hal: satu baris perangkat \code{\SeedDevice} bernama
+\SeedDeviceName{} dengan kalibrasi \HopperFull{} cm dan \HopperEmpty{} cm serta
+ambang \DefaultThreshold{} persen, dan dua jadwal contoh untuk perangkat itu, yaitu
+pakan pagi pukul 07:00 dan pakan sore pukul 17:00, masing-masing dua porsi.
+Penyisipan memakai pola yang aman dijalankan berulang: baris perangkat memakai
+\code{INSERT OR IGNORE}, sedangkan jadwal hanya disisipkan bila belum ada jadwal
+pada jam yang sama. Dengan pola itu, menjalankan skema pada basis data berisi data
+pengguna tidak mengubah apa pun.
+
+\section{Kardinalitas}
+
+\tabref{tab:07-kardinalitas} merangkum hubungan antar tabel dan perilakunya saat
+baris induk dihapus. Semua hubungan berasal dari perangkat dan memakai cascade,
+sehingga menghapus satu perangkat menghapus seluruh jejaknya. Satu-satunya hubungan
+tanpa cascade adalah riwayat pakan ke jadwal, yang memakai \code{SET NULL} agar
+riwayat tidak hilang ketika jadwal dihapus.
+
+\begin{table}[H]
+\centering
+\caption{Kardinalitas antar tabel dan perilaku saat induk dihapus.}
+\label{tab:07-kardinalitas}
+\small
+\begin{tabular}{@{}p{4.3cm}p{2.2cm}p{2.3cm}p{5.6cm}@{}}
+\toprule
+\textbf{Hubungan} & \textbf{Kardinalitas} & \textbf{Saat induk dihapus} &
+\textbf{Catatan} \\
+\midrule
+devices ke telemetry & satu ke banyak & cascade & Satu baris per sampel sensor. \\
+devices ke schedules & satu ke banyak & cascade & Jadwal berlaku setiap hari. \\
+devices ke commands & satu ke banyak & cascade & Termasuk perintah yang gagal. \\
+devices ke \code{feeding_logs} & satu ke banyak & cascade & Riwayat manual dan
+terjadwal. \\
+devices ke notifications & satu ke banyak & cascade & Notifikasi tidak berdiri
+sendiri. \\
+schedules ke \code{feeding_logs} & satu ke nol atau banyak & set null & Selalu null
+saat runtime. \\
+commands ke \code{feeding_logs} & satu ke nol atau satu & tanpa kunci asing &
+Korelasi lewat \code{command_id}. \\
+devices ke view status & satu ke satu & tidak berlaku & View, bukan tabel. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Migrasi Saat Inisialisasi}
+
+Inisialisasi tidak berhenti pada pembuatan skema. Ada tiga langkah pemeliharaan yang
+dijalankan setiap kali proses dinyalakan dan semuanya idempoten: kolom
+\code{timezone} ditambahkan bila belum ada; baris perangkat yang masih memakai
+kalibrasi lama diselaraskan ke \HopperFull{} dan \HopperEmpty{} dengan hanya
+menyentuh baris yang masih persis bernilai bawaan lama; dan tabel \code{commands}
+dibangun ulang bila batasan tipenya belum mengenal perintah uji servo. Ketiganya
+menjaga basis data lama tetap terpakai tanpa langkah manual.
+(\file{dashboard/db.py})
+
+\section{Kolom yang Ada tetapi Tidak Dipakai}
+
+Tiga kolom layak disebut karena keberadaannya dapat menyesatkan pembaca skema.
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \code{feeding_logs.schedule_id} tidak pernah diisi; jalur penulisan riwayat
+        terjadwal menuliskan null, sehingga nama jadwal tidak dapat ditampilkan
+        lewat join untuk riwayat terjadwal.
+  \item \code{feeding_logs.distance_before_cm} tidak pernah diisi; jalur penulisan
+        mengisi persentase sebelum, bukan jarak sebelum.
+  \item \code{commands.status} mengizinkan nilai \code{pending} dan sapuan timeout
+        memeriksanya, tetapi perintah selalu ditulis dengan status terkirim,
+        sehingga \code{pending} tidak pernah muncul pada data nyata.
+\end{itemize}
+
+Ketiganya bukan kesalahan yang menghentikan sistem; semuanya dicatat sebagai temuan
+pada \chapref{ch:09-catatan-asumsi} agar tidak dianggap perilaku yang disengaja.

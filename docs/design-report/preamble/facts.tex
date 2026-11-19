@@ -1,0 +1,108 @@
+% ===========================================================================
+% facts.tex — SATU SUMBER FAKTA untuk seluruh dokumen.
+%
+% Setiap angka/string di bab dan tabel WAJIB memakai macro dari berkas ini.
+% Jangan menulis angka kalibrasi, pin, atau timing secara literal.
+%
+% Rujukan (berkas:kode):
+%   firmware/esp32_feeder/config.h            pin, timing, kalibrasi, buffer
+%   firmware/esp32_feeder/esp32_feeder.ino    state machine, schedule engine
+%   firmware/esp32_feeder/net.cpp             topik, LWT, reconnect
+%   dashboard/commands.py                     send_command
+%   dashboard/handlers.py                     handle_telemetry / ack / status / state
+%   dashboard/db.py                           migration + query
+%   dashboard/config.py                       timeout, sweep, offline
+%   database/schema.sql                       6 tabel + 1 view
+%   bin/verify-facts.sh                       memeriksa konsistensi berkas ini
+% ===========================================================================
+
+% --- Identitas -------------------------------------------------------------
+\newcommand{\FwVersion}{1.0.0}
+\newcommand{\TopicPrefix}{feeder-ayurahmaw}
+\newcommand{\DeviceIdPrefix}{feeder}
+\newcommand{\DeviceExample}{feeder-64008c}
+\newcommand{\SeedDevice}{feeder01}
+\newcommand{\SeedDeviceName}{Feeder Kolam 1}
+\newcommand{\BoardName}{ESP32-WROOM-32 DevKit V1 (30-pin)}
+\newcommand{\CoreVersion}{3.3.12}
+\newcommand{\Fqbn}{esp32:esp32:esp32:UploadSpeed=115200}
+\newcommand{\SerialBaud}{115200}
+
+% --- Pin assignment (config.h) --------------------------------------------
+\newcommand{\PinServo}{13}
+\newcommand{\PinTrig}{5}
+\newcommand{\PinEcho}{18}
+\newcommand{\PinSda}{21}
+\newcommand{\PinScl}{22}
+
+% --- I2C (config.h) -------------------------------------------------------
+\newcommand{\AddrRtc}{0x68}
+\newcommand{\AddrLcd}{0x27}
+\newcommand{\AddrLcdAlt}{0x3F}
+% Catatan: nama makro LaTeX hanya boleh huruf, jadi I2C ditulis Iic.
+\newcommand{\IicClock}{100 kHz}
+
+% --- Kalibrasi hopper (config.h, diselaraskan 2026-11-19) -----------------
+\newcommand{\HopperFull}{3.0}
+\newcommand{\HopperEmpty}{17.0}
+\newcommand{\HopperSpan}{14.0}
+\newcommand{\MaxDistance}{40.0}
+
+% --- Timing (config.h) ----------------------------------------------------
+\newcommand{\PortionOpenMs}{1000}
+\newcommand{\SettleMs}{300}
+\newcommand{\GapMs}{200}
+\newcommand{\TelemetryMs}{15000}
+\newcommand{\SensorMs}{2000}
+\newcommand{\DisplayMs}{500}
+\newcommand{\PageMs}{4000}
+\newcommand{\RetryMs}{5000}
+\newcommand{\KeepAliveS}{60}
+\newcommand{\WindowS}{60}
+\newcommand{\MaxSchedules}{8}
+\newcommand{\PortionCycleMs}{1300}   % buka 1000 + settle 300
+
+% --- Servo (config.h) -----------------------------------------------------
+\newcommand{\ServoMinUs}{500}
+\newcommand{\ServoMaxUs}{2400}
+\newcommand{\ServoClosedDeg}{0}
+\newcommand{\ServoOpenDeg}{90}
+\newcommand{\ServoFreq}{50}
+
+% --- Buffer & NVS (config.h) ---------------------------------------------
+\newcommand{\MqttBuffer}{1024}
+\newcommand{\CmdQueue}{4}
+\newcommand{\NvsNamespace}{feeder}
+\newcommand{\DefaultThreshold}{20}
+\newcommand{\ReserveTelemetry}{256}
+\newcommand{\ReserveState}{256}
+\newcommand{\ReserveAck}{512}
+
+% --- Waktu (config.h) -----------------------------------------------------
+\newcommand{\NtpServer}{pool.ntp.org}
+\newcommand{\UtcOffsetHours}{7}
+\newcommand{\MinValidEpoch}{1600000000}
+
+% --- Platform (dashboard/config.py) --------------------------------------
+\newcommand{\CmdTimeoutS}{30}
+\newcommand{\SweepS}{10}
+\newcommand{\OfflineS}{45}
+\newcommand{\LiveTail}{200}
+\newcommand{\BrokerBind}{0.0.0.0:1883}
+\newcommand{\StreamlitVersion}{1.64.0}
+\newcommand{\StreamlitMin}{1.50}
+\newcommand{\PythonVersion}{3.14}
+\newcommand{\NodeVersion}{v22.23.2}
+
+% --- Basis data (database/schema.sql) ------------------------------------
+\newcommand{\NumTables}{6}
+\newcommand{\NumIndexes}{6}
+\newcommand{\NumPages}{6}
+\newcommand{\DbFile}{dashboard/feeder.db}
+\newcommand{\SchemaFile}{database/schema.sql}
+
+% --- Ekspresi -------------------------------------------------------------
+% pct = (empty - d) / (empty - full) * 100
+\newcommand{\PctFormula}{%
+  $\mathit{pct} = \dfrac{\mathit{empty} - d}{\mathit{empty} - \mathit{full}} \times 100$}
+\newcommand{\PctAtTenCm}{50}   % (17 - 10) / (17 - 3) * 100

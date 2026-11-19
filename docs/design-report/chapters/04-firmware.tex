@@ -1,0 +1,262 @@
+\chapter{Firmware ESP32}
+\label{ch:04-firmware}
+
+\section{Struktur Program}
+
+Firmware adalah satu sketch Arduino dengan \code{setup()} dan \code{loop()}, tanpa
+task FreeRTOS buatan sendiri. Semua pekerjaan berlangsung di dalam \code{loop()}
+sebagai sederetan tick kooperatif: setiap tick memeriksa \code{millis()} dan segera
+kembali bila belum waktunya. Tidak ada satu pun \code{delay()} di jalur utama,
+sehingga pembacaan sensor, gerakan servo, penanganan perintah MQTT, dan pengiriman
+telemetri tidak saling mengunci.
+
+\code{setup()} berjalan berurutan dan mencetak hasilnya ke serial pada
+\SerialBaud{} baud: serial dibuka lalu diberi jeda singkat; perangkat keras
+diinisialisasi (pindai bus I\textsuperscript{2}C, siapkan \code{TRIG} dan
+\code{ECHO}, pasang servo pada posisi tertutup, deteksi DS3231, deteksi LCD pada
+\AddrLcd{} lalu \AddrLcdAlt); konfigurasi dimuat dari NVS; jaringan disiapkan
+dengan mode station, identitas dari MAC, nama host, pemindaian jaringan, alamat
+broker, buffer \MqttBuffer{} byte, keepalive \KeepAliveS{} detik, socket timeout
+sepuluh detik, dan callback pesan; splash ditampilkan pada LCD; lalu jarak diukur
+sekali agar telemetri pertama tidak kosong.
+
+\figref{fig:fw-flow-main-loop} memperlihatkan bentuk \code{loop()}. Perhatikan dua
+deteksi tepi naik: saat koneksi MQTT baru terbentuk, telemetri langsung dikirim
+sebagai penanda perangkat hidup; saat WiFi baru tersambung, permintaan sinkronisasi
+waktu dimulai.
+
+\figureasset[\linewidth]{fw-flow-main-loop}{Alur loop utama firmware: tick kooperatif, deteksi
+tepi naik untuk telemetri awal dan sinkronisasi waktu, serta penanganan perintah
+dari antrean.}{fig:fw-flow-main-loop}
+
+\tabref{tab:04-tick} merinci setiap tick dan periodenya. Periode ``setiap iterasi''
+berarti fungsi dipanggil pada setiap putaran \code{loop()} dan keluar sendiri bila
+belum waktunya.
+
+\begin{table}[H]
+\centering
+\caption{Tujuh tick kooperatif di dalam \code{loop()} beserta fungsinya.}
+\label{tab:04-tick}
+\small
+\begin{tabular}{@{}p{3.1cm}p{2.4cm}p{9.1cm}@{}}
+\toprule
+\textbf{Fungsi} & \textbf{Periode} & \textbf{Tugas} \\
+\midrule
+\code{net::tick} & setiap iterasi & Menjaga koneksi: bila WiFi putus hanya
+\code{client.loop()} yang dipanggil; bila MQTT putus, connect ulang paling cepat
+\RetryMs{} ms. \\
+\code{commandTick} & setiap iterasi & Mengambil satu perintah dari antrean
+berukuran \CmdQueue{} lalu menjalankannya. \\
+\code{ntpTick} & setiap iterasi & Menunggu hasil SNTP, menggeser UTC ke waktu
+lokal, menulis hasilnya ke RTC, menampilkannya di LCD. \\
+\code{feedTick} & setiap iterasi & Menjalankan state machine gate; hanya bekerja
+saat fase tidak idle. \\
+\code{sensorTick} & \SensorMs{} ms & Mengukur jarak dan menghitung persentase sisa
+pakan. \\
+\code{scheduleTick} & satu detik & Memeriksa jadwal lokal terhadap jam RTC dan
+mengeksekusi paling banyak satu jadwal. \\
+\code{telemetryTick} & \TelemetryMs{} ms & Mempublikasikan telemetri berkala. \\
+\code{displayTick} & \DisplayMs{} ms & Menyegarkan LCD; halaman berganti tiap
+\PageMs{} ms saat ada kondisi error. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\src{firmware/esp32_feeder/esp32_feeder.ino}
+
+\section{Mesin Keadaan Gate Pakan}
+
+Gerakan gate dijalankan sebagai mesin keadaan berfase empat: idle, membuka,
+menutup, dan jeda antar porsi. Nama fase pada kode mengikuti urutan itu, mulai
+dari \code{FEED_IDLE} sampai \code{FEED_GAP}. Setiap fase hanya mencatat waktu
+masuknya, dan \code{feedTick} memeriksa selisih \code{millis()} terhadap waktu
+itu. Dengan pola ini gate dapat membuka dan menutup berkali-kali
+tanpa menghentikan penerimaan perintah atau pembaruan LCD.
+\figref{fig:fw-state-feed} menggambarkan transisinya dan
+\tabref{tab:04-state} memerinci kondisinya.
+
+\figureasset[\linewidth]{fw-state-feed}{Mesin keadaan gate pakan: fase idle, membuka, menutup,
+dan jeda antar porsi.}{fig:fw-state-feed}
+
+\begin{table}[H]
+\centering
+\caption{Transisi mesin keadaan gate pakan.}
+\label{tab:04-state}
+\small
+\begin{tabular}{@{}p{2.4cm}p{2.4cm}p{3.9cm}p{5.5cm}@{}}
+\toprule
+\textbf{Dari} & \textbf{Ke} & \textbf{Kondisi} & \textbf{Aksi} \\
+\midrule
+\code{FEED_IDLE} & \code{FEED_OPEN} & \code{feedStart()} dipanggil, fase masih
+idle, servo siap & Buka gate, catat waktu fase. \\
+\code{FEED_OPEN} & \code{FEED_CLOSING} & Lewat \PortionOpenMs{} ms sejak gate
+dibuka & Tutup gate, catat waktu fase. \\
+\code{FEED_CLOSING} & \code{FEED_GAP} & Lewat \SettleMs{} ms dan porsi masih
+tersisa & Catat waktu fase. \\
+\code{FEED_CLOSING} & \code{FEED_IDLE} & Lewat \SettleMs{} ms dan porsi habis &
+\code{finishFeed()}: tutup gate, ukur jarak, publikasikan hasil. \\
+\code{FEED_GAP} & \code{FEED_OPEN} & Lewat \GapMs{} ms sejak gate ditutup & Buka
+gate untuk porsi berikutnya. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\figref{fig:fw-feed-timing} menempatkan transisi itu pada garis waktu satu perintah
+dua porsi. Satu siklus porsi memerlukan \PortionCycleMs{} ms dan jeda \GapMs{} ms
+disisipkan di antara dua porsi. Urutan publikasi pada akhir rangkaian sengaja
+dibedakan menurut asal perintah: untuk pakan terjadwal, event dikirim lebih dahulu
+baru telemetri, karena platform memakai baris telemetri terakhir sebagai level
+sebelum; untuk pakan manual urutannya dibalik, agar saat ack tiba platform sudah
+memiliki level sesudah.
+
+\figuretikz[\linewidth]{fw-feed-timing}{Garis waktu satu perintah dua porsi: buka, tutup,
+settle, jeda, lalu porsi kedua, diakhiri publikasi hasil dan ack.}{fig:fw-feed-timing}
+
+\section{Konfigurasi Tersimpan}
+
+Konfigurasi yang harus bertahan setelah daya putus disimpan di NVS pada namespace
+\NvsNamespace, seperti pada \tabref{tab:04-nvs}. Nilai bawaan dipakai bila kunci
+belum pernah ditulis, sehingga papan baru tetap berfungsi tanpa konfigurasi awal.
+
+\begin{table}[H]
+\centering
+\caption{Kunci NVS pada namespace \code{feeder}.}
+\label{tab:04-nvs}
+\small
+\begin{tabular}{@{}p{2.2cm}p{1.5cm}p{5.4cm}p{5.5cm}@{}}
+\toprule
+\textbf{Kunci} & \textbf{Tipe} & \textbf{Isi} & \textbf{Catatan} \\
+\midrule
+\code{threshold} & Int & Ambang persen pakan menipis & Bawaan \DefaultThreshold;
+ditulis lewat \code{set_threshold}. \\
+\code{fireDate} & UInt & Tanggal terakhir jadwal berjalan, dikodekan
+\code{y*10000+mo*100+d} & Bersama bitmask mencegah jadwal berjalan dua kali sehari. \\
+\code{fireMask} & UInt & Bitmask jadwal yang sudah dijalankan pada \code{fireDate}
+& Satu bit untuk satu entri, maksimal \MaxSchedules{} entri. \\
+\code{schedules} & String & Array JSON jadwal aktif & Ditimpa seluruhnya setiap
+\code{set_schedule} diterima. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\src{firmware/esp32_feeder/protocol.cpp}
+
+Firmware juga memiliki anggaran memori untuk payload keluar. Buffer MQTT disetel
+\MqttBuffer{} byte, sedangkan dokumen JSON telemetri, event, dan ack dibatasi
+berturut-turut \ReserveTelemetry{}, \ReserveState{}, dan \ReserveAck{} byte.
+Payload yang melebihi anggaran dibuang dan dicatat di log, bukan dipotong, karena
+payload terpotong akan gagal di-parse platform. Anggaran ack paling besar karena
+payload \code{get_state} memuat snapshot keadaan lengkap di dalam field
+\code{message}.
+
+\section{Penjadwalan Lokal}
+
+Jadwal harian dijalankan perangkat, bukan platform. Platform hanya menyimpan jadwal
+dan mengirimkannya lewat \code{set_schedule}; setelah itu perangkat memegang kendali
+waktu. Pilihan ini membuat jadwal tetap berjalan saat jaringan atau host mati, dan
+menghilangkan kebutuhan platform terjaga sepanjang hari.
+
+Setiap detik \code{scheduleTick} membaca jam RTC; bila jam belum valid, fungsi
+langsung kembali sehingga tidak ada jadwal dieksekusi dengan waktu salah. Untuk
+setiap entri, jam dan menit harus sama dengan jam sekarang dan detik harus masih di
+dalam jendela \WindowS{} detik pertama menit itu, sehingga jadwal 07:00 dapat
+berjalan antara 07:00:00 dan 07:00:59. Jumlah entri dibatasi \MaxSchedules{}, dan
+setiap entri menempati satu bit pada bitmask harian sehingga tidak dapat berjalan
+dua kali pada hari yang sama meskipun perangkat di-reboot.
+
+Empat keadaan membuat jadwal tidak dieksekusi. Bila gate sibuk, eksekusi ditunda ke
+detik berikutnya selama masih di dalam jendela. Bila servo tidak terpasang atau
+hopper terbaca kosong, jadwal ditandai sudah dijalankan hari itu dan dilewati,
+karena mencoba lagi hanya mengulang kegagalan yang sama. Bila jam belum valid, tidak
+ada jadwal yang dicoba. Pembedaan antara ``ditunda'' dan ``ditandai dijalankan''
+disengaja: penundaan untuk keadaan yang dapat berubah dalam hitungan detik,
+penandaan untuk keadaan yang tidak berubah tanpa tindakan manusia.
+\figref{fig:fw-seq-scheduled-feed} memperlihatkan akibatnya di sisi platform.
+
+\figureasset[\linewidth]{fw-seq-scheduled-feed}{Urutan eksekusi jadwal lokal: perangkat
+menjalankan gate atas dasar jam RTC, lalu melaporkan event ke topik state.}{fig:fw-seq-scheduled-feed}
+
+\section{Siklus Hidup Koneksi MQTT}
+
+\figref{fig:fw-seq-mqtt-lifecycle} merangkum siklus hidup koneksi. Tiga hal
+ditetapkan saat connect: LWT berupa string \code{offline} pada topik
+\topic{status} dengan tanda retained; publikasi birth \code{online} pada topik yang
+sama, juga retained; dan langganan pada topik \topic{command}. Flag retained pada
+keduanya membuat platform selalu memiliki gambaran terakhir, karena subscriber baru
+langsung menerima \code{online} atau \code{offline}. Percobaan connect diulang
+paling cepat setiap \RetryMs{} ms, dan keepalive \KeepAliveS{} detik membuat broker
+menganggap sesi mati bila tidak ada paket sama sekali pada rentang itu.
+
+\figureasset[\linewidth]{fw-seq-mqtt-lifecycle}{Siklus hidup koneksi MQTT perangkat: connect
+dengan LWT terdaftar, publikasi birth retained, langganan perintah, lalu reconnect
+berkala setelah koneksi putus.}{fig:fw-seq-mqtt-lifecycle}
+
+Satu keputusan perlu dijelaskan: tidak ada pemutusan koneksi rapi ketika WiFi
+hilang. Firmware sengaja tidak memanggil \code{disconnect()} pada keadaan itu,
+karena paket \code{DISCONNECT} membatalkan wasiat: perangkat akan terlihat
+memutuskan diri dengan sengaja, LWT tidak diterbitkan, dan pesan retained
+\code{online} tertinggal sehingga dashboard tidak pernah melihat perangkat jatuh.
+Yang dilakukan firmware adalah membiarkan sesi TCP mati sendiri, membiarkan broker
+menerbitkan \code{offline}, dan tetap memanggil \code{client.loop()} agar pustaka
+MQTT menyadari socket sudah mati lalu menyambung ulang.
+(\file{firmware/esp32_feeder/net.cpp})
+
+Callback pesan menyaring sebelum apa pun terjadi: pesan yang topiknya bukan
+\code{command} langsung dibuang. Penyaringan itu menangkal perilaku broker
+tertanam yang dapat mengirim pesan retained dari topik lain kepada subscriber mana
+pun. Setelah lolos saringan, payload masuk ke antrean ring berukuran \CmdQueue{}
+dan dijalankan satu per satu oleh \code{commandTick}; bila antrean penuh, perintah
+baru dibuang dan dicatat di log.
+
+\section{Mode Degradasi}
+
+Setiap periferal bersifat opsional. Dengan hanya papan pengendali terpasang,
+firmware tetap menyambung, tetap menjawab setiap perintah, dan tidak pernah
+reboot; yang hilang hanya kemampuan terkait (\tabref{tab:04-degradasi}).
+
+\begin{table}[H]
+\centering
+\caption{Perilaku firmware ketika sebuah periferal tidak terdeteksi.}
+\label{tab:04-degradasi}
+\small
+\begin{tabular}{@{}p{2.4cm}p{12.6cm}@{}}
+\toprule
+\textbf{Periferal hilang} & \textbf{Akibat} \\
+\midrule
+Sensor ultrasonik & Telemetri tetap dikirim tanpa \code{distance_cm} dan berstatus
+\code{error}; level pakan tidak diketahui; pakan manual tetap diizinkan karena tidak
+ada pembacaan level yang dapat dipakai sebagai penjaga. \\
+Motor servo & Pakan manual dijawab \code{error_servo}; jadwal dilewati dan ditandai
+sudah dijalankan untuk hari itu. \\
+Modul RTC & \code{set_rtc} tetap berhasil dengan jam internal di RAM, tetapi jam
+hilang saat reboot; jadwal baru berjalan setelah \code{set_rtc} atau sinkronisasi
+NTP. \\
+LCD karakter & Tidak ada tampilan lokal; seluruh fungsi lain berjalan biasa. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Pustaka dan Versi}
+
+Firmware dibangun dengan inti Arduino esp32 \CoreVersion{} dan opsi papan
+\code{\Fqbn}. \tabref{tab:04-pustaka} memuat pustaka pihak ketiga yang dipakai.
+
+\begin{table}[H]
+\centering
+\caption{Pustaka firmware dan versinya.}
+\label{tab:04-pustaka}
+\small
+\begin{tabular}{@{}p{4.4cm}p{4.6cm}p{1.6cm}p{3.7cm}@{}}
+\toprule
+\textbf{Pustaka} & \textbf{Penulis} & \textbf{Versi} & \textbf{Kegunaan} \\
+\midrule
+PubSubClient & Nick O'Leary & 2.8+ & Klien MQTT sinkron, LWT, buffer. \\
+ArduinoJson & Benoit Blanchon & 7.x & Parse perintah dan susun payload. \\
+RTClib & Adafruit & 2.1+ & Akses DS3231. \\
+LiquidCrystal I2C & Frank de Brabander & 1.1+ & LCD1602 melalui PCF8574. \\
+ESP32Servo & K. Harrington, J. K. Bennett & 0.13+ & PWM servo berbasis LEDC. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\src{firmware/esp32_feeder/README.md}

@@ -1,0 +1,178 @@
+\chapter{Arsitektur Sistem}
+\label{ch:02-arsitektur}
+
+\section{Gambaran Umum}
+
+Sistem dibangun sebagai dua proses yang longgar terikat. Proses pertama adalah
+\textbf{node perangkat}: satu sketch Arduino di \BoardName{} yang hanya mengenal
+WiFi, broker MQTT, sensor ultrasonik, servo, modul RTC, dan LCD. Proses kedua adalah
+\textbf{platform}: satu proses Python yang di dalamnya broker MQTT, worker ingesti,
+sweeper, basis data SQLite, dan dashboard Streamlit hidup bersama. Keduanya tidak
+pernah memanggil satu sama lain; satu-satunya jalur komunikasi adalah pesan MQTT
+yang melewati broker. Konsekuensinya, perangkat tetap menjalankan jadwal harian dan
+tetap menakar pakan ketika host mati, dan platform tetap menampilkan riwayat ketika
+perangkat sedang tidak terpasang.
+
+\figref{fig:e2e-topology} menempatkan kedua proses beserta berkas dan topik yang
+menghubungkannya. Broker berada di dalam kotak proses Python: tidak ada layanan
+MQTT yang perlu dipasang lebih dahulu.
+
+\figureasset[\linewidth]{e2e-topology}{Topologi ujung-ke-ujung: node perangkat dan satu proses
+Python yang memuat broker MQTT, worker, sweeper, basis data, dan dashboard.}{fig:e2e-topology}
+
+\section{Blok Perangkat Lunak Platform}
+
+Di dalam proses Python, tanggung jawab dipecah menjadi blok yang saling mengenal
+hanya melalui basis data dan broker. \figref{fig:sw-block-diagram} menunjukkan
+susunannya: satu entry point menyiapkan basis data, memilih mode broker, menyalakan
+worker, lalu menyerahkan proses kepada Streamlit.
+
+\figuretikz[\linewidth]{sw-block-diagram}{Blok perangkat lunak platform: entry point, pemilih
+mode broker, worker ingesti, handler, sweeper, lapisan basis data, dan lapisan
+presentasi.}{fig:sw-block-diagram}
+
+Urutan penyalaan berlangsung satu arah. Pertama \code{db.init_db()} membuat skema
+dan data awal bila tabel \code{devices} belum ada, lalu menjalankan migrasi kecil
+yang idempoten. Kedua, platform memeriksa konfigurasi broker: bila
+\code{EMBED_BROKER} bernilai salah, platform memakai broker pada \code{MQTT_URL};
+bila benar, platform menguji apakah port sudah terpakai. Ketiga, worker paho
+disambungkan secara asinkron dan diberi waktu lima detik untuk terhubung. Keempat,
+sweeper dijalankan sebagai thread daemon. Kelima, proses diserahkan kepada Streamlit
+pada port 8501. Urutan ini penting karena perangkat dapat menyambung kapan saja
+tanpa menunggu ada orang membuka dashboard. (\file{dashboard/run.py},
+\file{dashboard/runtime.py})
+
+\section{Komponen Runtime}
+
+\tabref{tab:02-komponen} memetakan berkas pada folder \file{dashboard} ke perannya.
+Tabel ini menjadi rujukan pada bab berikutnya ketika sebuah perilaku perlu
+ditelusuri ke implementasinya.
+
+\begin{table}[H]
+\centering
+\caption{Komponen runtime platform dan perannya.}
+\label{tab:02-komponen}
+\small
+\begin{tabular}{@{}p{2.4cm}p{12.2cm}@{}}
+\toprule
+\textbf{Berkas} & \textbf{Peran} \\
+\midrule
+\file{run.py} & Entry point: menyalakan runtime lebih dahulu, lalu menyerahkan
+proses ke Streamlit sehingga broker dan worker sudah hidup sebelum ada sesi. \\
+\file{runtime.py} & Singleton proses: menyiapkan basis data, memilih mode broker,
+menyalakan worker, menjalankan sweeper, menyimpan label mode untuk sidebar. \\
+\file{broker.py} & Broker MQTT tertanam (amqtt) dengan autentikasi anonim, plus
+pemeriksa apakah port sudah dipakai proses lain. \\
+\file{mqtt.py} & Worker paho: berlangganan empat jenis topik, memecah topik,
+meneruskan payload ke handler, menyimpan tail pesan untuk halaman Live. \\
+\file{handlers.py} & Empat handler pesan masuk, konversi jarak ke persen, dan
+evaluasi alert. \\
+\file{commands.py} & Jalur tulis keluar: menulis \code{commands} dan
+\code{feeding_logs} sebelum mempublikasikan perintah. \\
+\file{db.py} & Lapisan akses SQLite: koneksi thread-local, WAL,
+\code{BEGIN IMMEDIATE}, seluruh kueri, backup dan restore. \\
+\file{config.py} & Konfigurasi dari variabel lingkungan dan Streamlit Secrets. \\
+\file{data.py} & Pembungkus baca untuk UI dengan cache berdurasi pendek. \\
+\file{actions.py} & Aksi dari UI: mengirim perintah dan memberi umpan balik. \\
+\file{app.py} & Kerangka dashboard: navigasi, pemilih perangkat, status sistem,
+pemilih bahasa, panel backup dan restore. \\
+\file{app_pages} & Isi tiap halaman: \file{status}, \file{live}, \file{alerts},
+\file{history}, \file{schedules}, \file{control}. \\
+\file{cli.py} & Pengiriman perintah tanpa dashboard lewat jalur tulis yang sama. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Pembagian Thread}
+
+Satu proses Python memuat empat jalur eksekusi, seperti pada
+\tabref{tab:02-thread}. Penulis basis data bukan hanya UI, sehingga setiap koneksi
+bersifat thread-local dan setiap operasi multi-pernyataan dibungkus
+\code{BEGIN IMMEDIATE}. (\file{dashboard/db.py})
+
+\begin{table}[H]
+\centering
+\caption{Pembagian thread di dalam proses platform.}
+\label{tab:02-thread}
+\small
+\begin{tabular}{@{}p{2.5cm}p{2.6cm}p{5.4cm}p{4.1cm}@{}}
+\toprule
+\textbf{Thread} & \textbf{Asal} & \textbf{Tugas} & \textbf{Sinkronisasi} \\
+\midrule
+main & Proses utama & Menjalankan skrip Streamlit per sesi, membaca basis data,
+mengirim perintah. & Koneksi thread-local; cache baca pendek. \\
+amqtt-broker & Daemon broker tertanam & Meneruskan pesan, menyimpan pesan retained,
+menerbitkan LWT. & Event loop asyncio; tidak menyentuh basis data. \\
+paho-network & Internal paho (\code{loop_start}) & Menjaga koneksi worker, memanggil
+callback, menulis lewat handler. & Koneksi thread-local; transaksi untuk tulisan
+berpasangan. \\
+timeout-sweeper & Daemon yang dibuat runtime & Tiap \SweepS{} detik menandai perintah
+tanpa ack dan perangkat tanpa data. & Transaksi singkat per sweep. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Selain keempat thread itu, ada dua struktur memori bersama: tail pesan untuk
+halaman Live berupa \code{deque} berukuran \LiveTail{} entri yang dilindungi
+\code{threading.Lock}, dan singleton runtime yang dipakai seluruh sesi. State sesi
+Streamlit tidak dipakai bersama antar thread karena hanya hidup di dalam sesi
+peramban.
+
+\section{Aliran Data Dua Arah}
+
+Arah naik bersifat \emph{fire and forget}: telemetri dipublikasikan tiap
+\TelemetryMs{} ms dengan QoS~0, status diterbitkan retained saat connect, dan event
+jadwal diterbitkan setelah perangkat mengeksekusi jadwalnya sendiri. Arah turun
+bersifat \emph{request-response}: platform menyimpan baris perintah lebih dahulu,
+mempublikasikan dengan QoS~1, lalu menunggu ack yang membawa \code{command_id} yang
+sama; bila ack tidak datang dalam \CmdTimeoutS{} detik, sweeper menyelesaikannya.
+
+Pemisahan itu tercermin pada pekerjaan masing-masing pihak. Perangkat bertanggung
+jawab atas aktuasi dan penjadwalan; platform atas pencatatan, agregasi, notifikasi,
+dan penyajian. Persentase pakan dihitung kedua pihak dengan rumus yang sama, tetapi
+platform selalu menghitung ulang dari \code{distance_cm} memakai kalibrasi pada
+baris \code{devices}, sehingga kalibrasi dapat dikoreksi tanpa mem-flash ulang
+firmware.
+
+\section{Mengapa Broker Tertanam}
+
+Broker tertanam dipilih karena tiga alasan praktis. Pertama, tidak ada
+ketergantungan pada layanan eksternal: instalasi broker sistem operasi pernah
+terblokir pada mesin pengembangan, dan aplikasi yang bergantung padanya tidak dapat
+dijalankan sama sekali. Kedua, satu proses berarti satu perintah untuk menyalakan
+seluruh platform. Ketiga, umur pakai lebih panjang karena broker hanya memerlukan
+implementasi protokol yang benar, dan klien mana pun dapat dipakai untuk memeriksa
+lalu lintas pesan.
+
+Konsekuensinya, platform harus menangani tiga kemungkinan keadaan port seperti pada
+\tabref{tab:02-mode-broker}. Mode terpilih ditampilkan di sidebar agar perilaku
+sistem tidak menjadi misteri bagi pengguna. (\file{dashboard/broker.py})
+
+\begin{table}[H]
+\centering
+\caption{Tiga mode broker yang mungkin terpilih saat platform dinyalakan.}
+\label{tab:02-mode-broker}
+\small
+\begin{tabular}{@{}p{1.9cm}p{3.6cm}p{4.4cm}p{4.7cm}@{}}
+\toprule
+\textbf{Mode} & \textbf{Kapan terpilih} & \textbf{Perilaku} & \textbf{Catatan} \\
+\midrule
+embedded & \code{EMBED_BROKER} benar dan port \code{\BrokerBind} bebas & Broker amqtt
+dinyalakan di dalam proses & Mode bawaan dan mode pengujian lokal. \\
+existing & \code{EMBED_BROKER} benar tetapi port sudah dipakai & Platform tidak
+menyalakan broker; worker menyambung ke \code{MQTT_URL} & Terjadi bila broker
+sistem operasi berjalan sebagai layanan. \\
+external & \code{EMBED_BROKER} salah & Platform menyambung ke broker pada
+\code{MQTT_URL} & Dipakai untuk deployment yang tidak membuka port masuk. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{warnbox}
+Mode \code{existing} dan \code{embedded} tidak dapat dibedakan dari sisi perangkat.
+Karena itu perilaku broker tertanam yang menyimpang dari standar, yaitu ikut
+mengirim pesan retained dari topik lain ke subscriber, harus ditangani di sisi
+perangkat: firmware mengabaikan setiap pesan yang topiknya bukan \topic{command}
+(\chapref{ch:06-protokol-mqtt}). Batas kepercayaan sistem ini adalah jaringan, bukan
+aplikasi; akibatnya dicatat pada \chapref{ch:09-catatan-asumsi}.
+\end{warnbox}

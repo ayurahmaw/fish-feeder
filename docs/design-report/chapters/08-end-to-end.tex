@@ -1,0 +1,176 @@
+\chapter{Alur End-to-End}
+\label{ch:08-end-to-end}
+
+\section{Satu Perintah dari Klik sampai Baris Basis Data}
+
+\figref{fig:e2e-sequence} menyatukan seluruh bab sebelumnya menjadi satu urutan
+pesan. Yang digambarkan adalah kasus yang paling banyak melibatkan komponen, yaitu
+pemberian pakan manual yang berhasil, karena kasus itu menyentuh kelima bagian
+sistem: peramban, aplikasi dan basis data, broker, serta perangkat.
+
+\figureasset[\linewidth]{e2e-sequence}{Urutan ujung-ke-ujung satu perintah pakan manual: dari
+klik pengguna, penulisan baris basis data, publikasi perintah, eksekusi gate,
+sampai pembaruan status perintah dan riwayat pakan.}{fig:e2e-sequence}
+
+Berikut yang terjadi pada sumbu waktu, dimulai dari klik. Pengguna menekan tombol
+pemberian pakan dan mengonfirmasi jumlah porsi pada dialog; aplikasi menyusun
+pengenal perintah baru berbentuk \code{cmd-} diikuti uuid, lalu membuka transaksi
+tulis dan menyisipkan dua baris sekaligus, yaitu satu baris pada tabel
+\code{commands} berstatus terkirim dan satu baris pada tabel \code{feeding_logs}
+berstatus menunggu dengan level sebelum diambil dari telemetri terakhir. Transaksi
+ditutup, dan baru setelah itu pesan JSON dipublikasikan ke topik perangkat dengan
+QoS~1. Broker meneruskan pesan ke perangkat; perangkat memeriksa topik, memasukkan
+payload ke antrean, dan pada putaran \code{loop()} berikutnya mengambil satu
+perintah dari antrean. Karena gate masih idle, servo siap, dan level pakan tidak
+nol, perangkat memulai porsi pertama: gate terbuka \PortionOpenMs{} ms, ditutup,
+diberi jeda \SettleMs{} ms, lalu jeda \GapMs{} ms sebelum porsi berikutnya.
+Setelah porsi terakhir, perangkat mengukur ulang jarak, mempublikasikan telemetri,
+lalu mempublikasikan ack berisi pengenal perintah yang sama dan hasil \code{ok}.
+Ack diterima worker, yang memanggil handler ack; handler menandai baris perintah
+sukses beserta waktu ack, menandai baris riwayat pakan sukses, dan mengisi level
+sesudah dari baris telemetri terakhir. Pada saat itulah baris basis data yang
+dibuat di awal berubah menjadi hasil akhir, dan halaman Status, History, serta
+Control menampilkannya pada penyegaran berikutnya.
+
+Bila salah satu mata rantai itu putus, urutannya berhenti pada titik yang
+berbeda dan hasilnya tetap terlihat. Broker yang tidak meneruskan pesan membuat
+perintah tetap berstatus terkirim sampai sweeper menandainya \code{timeout}.
+Perangkat yang menolak karena keadaan tertentu menjawab dengan hasil selain
+\code{ok}, sehingga perintah ditandai gagal dan notifikasi pemberian pakan gagal
+muncul. Perangkat yang mati total mengubah topik status menjadi offline, sehingga
+halaman Status menampilkan perangkat tidak terhubung. Tidak ada jalur yang
+berakhir tanpa status.
+
+\section{Matriks Pesan MQTT dan Aksi Basis Data}
+
+\tabref{tab:08-matriks} memetakan setiap jenis pesan yang mungkin masuk ke aksi
+basis data yang ditimbulkannya. Tabel ini adalah ringkasan dari empat handler pada
+\file{handlers.py} dan satu thread sweeper pada \file{runtime.py}.
+
+\begin{table}[H]
+\centering
+\caption{Matriks pesan masuk terhadap aksi basis data.}
+\label{tab:08-matriks}
+\small
+\begin{tabular}{@{}p{3.0cm}p{5.2cm}p{3.0cm}p{3.2cm}@{}}
+\toprule
+\textbf{Pesan} & \textbf{Aksi basis data} & \textbf{Tabel} & \textbf{Pemicu
+lanjutan} \\
+\midrule
+\code{telemetry} & Sisip satu baris telemetri, perbarui waktu terakhir terlihat,
+tutup notifikasi offline, evaluasi ambang pakan. & \code{telemetry}, \code{devices},
+\code{notifications} & Notifikasi pakan menipis atau habis. \\
+\code{status} online & Tandai perangkat online, tutup notifikasi offline. & \code{devices},
+\code{notifications} & -- \\
+\code{status} offline & Tandai perangkat offline, buat notifikasi offline bila
+belum ada. & \code{devices}, \code{notifications} & Notifikasi perangkat offline. \\
+\code{ack} dengan hasil ok & Tandai perintah sukses, tandai riwayat pakan sukses,
+isi level sesudah. & \code{commands}, \code{feeding_logs} & -- \\
+\code{ack} dengan hasil lain & Tandai perintah dan riwayat pakan gagal, buat
+notifikasi kegagalan. & \code{commands}, \code{feeding_logs}, \code{notifications} & Notifikasi
+pemberian pakan gagal. \\
+\code{state} event jadwal & Sisip satu baris riwayat terjadwal tanpa pengenal
+perintah, isi level sebelum dan sesudah. & \code{feeding_logs}, \code{devices} & Tampil di
+halaman History sebagai terjadwal. \\
+Tanpa ack dalam \CmdTimeoutS{} detik & Tandai perintah timeout, tandai riwayat
+pakan gagal dengan pesan timeout. & \code{commands}, \code{feeding_logs} & -- \\
+Tanpa data dalam \OfflineS{} detik & Tandai perangkat offline, buat notifikasi
+offline. & \code{devices}, \code{notifications} & Notifikasi perangkat offline. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Ketertelusuran Kebutuhan}
+
+\tabref{tab:08-trace} menautkan setiap kebutuhan fungsional dan non-fungsional ke
+bab yang membahasnya, gambar yang menggambarkannya, dan berkas yang
+mengimplementasikannya. Tabel ini dipakai sebagai daftar periksa: tidak ada
+kebutuhan yang boleh hanya muncul di dokumen tanpa jejak implementasi, dan tidak
+ada perilaku penting yang hanya ada di kode tanpa penjelasan.
+
+{\scriptsize
+\begin{longtable}{@{}p{1.1cm}p{2.9cm}p{3.1cm}p{7.3cm}@{}}
+\caption{Ketertelusuran kebutuhan ke bab, gambar, dan berkas implementasi.}
+\label{tab:08-trace} \\
+\toprule
+\textbf{Kode} & \textbf{Kebutuhan} & \textbf{Bab dan gambar} & \textbf{Berkas
+implementasi} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Kode} & \textbf{Kebutuhan} & \textbf{Bab dan gambar} & \textbf{Berkas
+implementasi} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+FR-01 & Grafik sisa pakan periodik untuk rentang 1, 6, atau 24 jam &
+\chapref{ch:05-website}, \figref{fig:web-flowchart} & \file{live.py},
+\file{data.py}, \file{db.py} (\code{telemetry_series}) \\
+FR-02 & Tampilan keadaan terakhir perangkat dengan penyegaran otomatis dan penanda
+kondisi pakan & \chapref{ch:05-website}, \tabref{tab:05-halaman} &
+\file{status.py}, \file{schema.sql}
+(\code{v_device_status}) \\
+FR-03 & Pemberian pakan manual dari dashboard & \chapref{ch:05-website},
+\figref{fig:web-seq-manual-feed-ok}, \figref{fig:web-seq-manual-feed-fail} &
+\file{commands.py}, \file{handlers.py},
+\file{esp32_feeder.ino} \\
+FR-04 & Permintaan keadaan perangkat saat ini & \chapref{ch:06-protokol-mqtt},
+\tabref{tab:06-command} & \file{control.py},
+\file{commands.py}, \file{protocol.cpp} \\
+FR-05 & Pengelolaan jadwal dan pengirimannya ke perangkat &
+\chapref{ch:05-website}, \figref{fig:web-seq-schedule-sync} &
+\file{schedules.py}, \file{db.py}
+(\code{insert_schedule}), \file{esp32_feeder.ino}
+(\code{scheduleTick}) \\
+FR-06 & Pengaturan ambang notifikasi pakan menipis & \chapref{ch:05-website},
+\tabref{tab:06-command} & \file{control.py},
+\file{db.py} (\code{set_low_feed_threshold}),
+\file{handlers.py} \\
+FR-07 & Notifikasi pakan menipis, habis, gagal, dan perangkat offline beserta
+penandaan dibaca & \chapref{ch:05-website}, \figref{fig:web-seq-telemetry-alert},
+\tabref{tab:07-kamus} & \file{handlers.py},
+\file{alerts.py}, \file{schema.sql} \\
+FR-08 & Riwayat pemberian pakan per periode dengan level sebelum dan sesudah &
+\chapref{ch:05-website}, \figref{fig:fw-seq-scheduled-feed} &
+\file{history.py}, \file{db.py}
+(\code{list_feeding_logs}) \\
+NFR-01 & Rantai perangkat ke MQTT ke basis data ke web berjalan tanpa kehilangan
+pesan, dengan penyambungan ulang otomatis & \chapref{ch:02-arsitektur},
+\figref{fig:e2e-topology} & \file{mqtt.py}, \file{handlers.py},
+\file{net.cpp} \\
+NFR-02 & Latensi perintah pada jaringan lokal dan penandaan timeout &
+\chapref{ch:05-website}, \tabref{tab:05-sweeper} & \file{runtime.py},
+\file{config.py} (\code{COMMAND_TIMEOUT_SEC}) \\
+NFR-03 & Akurasi konversi jarak ke persentase sisa pakan & \chapref{ch:03-perangkat-keras}
+(bagian kalibrasi hopper) & \file{handlers.py} (\code{compute_pct}),
+\file{esp32_feeder.ino} (\code{pctFromCm}) \\
+NFR-04 & Akurasi eksekusi jadwal terhadap jam terjadwal & \chapref{ch:04-firmware},
+\figref{fig:fw-seq-scheduled-feed} & \file{esp32_feeder.ino}
+(\code{scheduleTick}, jendela \WindowS{} detik) \\
+NFR-05 & Batasan keamanan: broker tanpa autentikasi dan tanpa TLS, hanya untuk
+jaringan lokal & \chapref{ch:02-arsitektur}, \chapref{ch:09-catatan-asumsi} &
+\file{broker.py} (autentikasi anonim) \\
+NFR-06 & Batasan skala: sistem divalidasi untuk satu perangkat &
+\chapref{ch:01-pendahuluan}, \tabref{tab:07-kamus} & \file{schema.sql}
+(seed \code{feeder01}), \file{config.h} \\
+\end{longtable}
+}
+
+\section{Anggaran Waktu Satu Perintah}
+
+Dengan nilai yang berlaku sekarang, satu porsi memerlukan \PortionCycleMs{} ms
+ditambah jeda antar porsi sebesar \GapMs{} ms bila porsi lebih dari satu.
+Karena itu perintah dua porsi memerlukan $2 \times \PortionCycleMs + \GapMs$
+milidetik, dan perintah sepuluh porsi memerlukan
+$10 \times \PortionCycleMs + 9 \times \GapMs$ milidetik. Angka-angka itu adalah
+batas bawah, bukan batas atas: setelah gate terakhir menutup, perangkat masih
+mengukur jarak, mempublikasikan telemetri, lalu mengirim ack. Batas waktu
+\CmdTimeoutS{} detik pada platform dipilih jauh di atas total tersebut, sehingga
+perintah sepuluh porsi pun tidak akan ditandai timeout ketika perangkat sehat.
+
+Untuk perintah yang tidak menggerakkan gate, seperti pengaturan ambang atau
+permintaan keadaan, waktu proses di perangkat hanya satu putaran \code{loop()},
+dan round-trip ditentukan oleh latensi jaringan lokal. Angka itu tidak dijanjikan
+di dokumen ini karena tidak diukur secara sistematis; yang dijamin oleh rancangan
+adalah batas atas \CmdTimeoutS{} detik untuk setiap perintah, apa pun tipenya.

@@ -1,0 +1,172 @@
+\chapter{Pendahuluan}
+\label{ch:01-pendahuluan}
+
+\section{Latar Belakang dan Rumusan Masalah}
+
+Pemberian pakan pada kolam akuaponik adalah pekerjaan harian yang paling mudah
+salah: waktunya bergeser mengikuti kesibukan pemilik, dan jumlahnya ditakar dengan
+perkiraan. Kedua kesalahan itu berbiaya langsung pada kualitas air. Pakan yang
+berlebih tidak habis dimakan ikan, mengendap, dan terurai menjadi amonia serta
+nitrit yang menekan daya dukung akuaponik; pakan yang kurang menghambat
+pertumbuhan ikan dan menurunkan pasokan nutrisi bagi tanaman. Persoalan yang harus
+diselesaikan karena itu bukan sekadar menyalakan motor pada jam tertentu,
+melainkan menjaga pemberian pakan tetap tepat waktu dan tepat jumlah, sekaligus
+memberi tahu pemilik ketika persediaan pakan menipis atau habis.
+
+Pemantauan manual menambah persoalan kedua: pemilik tidak selalu berada di lokasi,
+sehingga ia tidak tahu sisa pakan tanpa melihat langsung dan tidak dapat memberi
+pakan darurat saat dibutuhkan. Rancangan ini menjawab keduanya dengan satu node
+perangkat dan satu platform pemantauan. Node berbasis \BoardName{} mengukur jarak
+permukaan pakan di hopper dengan sensor ultrasonik, menggerakkan gate pakan dengan
+motor servo, dan menjalankan jadwal harian secara mandiri. Platform berjalan
+sebagai satu proses Python yang memuat broker MQTT, worker ingesti, sweeper, basis
+data SQLite, dan dashboard Streamlit.
+
+Empat pertanyaan berikut menjadi rumusan masalah rancangan ini.
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item Bagaimana menakar pakan dalam satuan porsi yang konsisten dan melaporkan
+        sisa pakan hopper sebagai persentase yang dapat dibandingkan antar waktu?
+  \item Bagaimana merancang pertukaran pesan sehingga setiap perintah memiliki
+        hasil yang pasti: berhasil, gagal, atau tidak dijawab sama sekali?
+  \item Bagaimana menyimpan telemetri, jadwal, perintah, riwayat pakan, dan
+        notifikasi dalam satu basis data yang konsisten meskipun ditulis beberapa
+        thread sekaligus?
+  \item Bagaimana menyajikan keadaan sistem dan sarana kendalinya dalam satu
+        dashboard yang tetap ringan pada perangkat kelas laptop?
+\end{itemize}
+
+\section{Tujuan}
+
+Sasaran perancangan ini adalah menghasilkan rancangan yang terverifikasi terhadap
+kode yang benar-benar berjalan:
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+  \item node perangkat berbasis \BoardName{} yang menakar pakan dalam satuan
+        porsi, mengukur jarak permukaan pakan secara periodik, dan tetap berfungsi
+        ketika sebagian periferal tidak terpasang;
+  \item kontrak pesan MQTT yang eksplisit, dengan kewajiban ack untuk setiap
+        perintah dan penandaan \code{timeout} setelah \CmdTimeoutS{} detik;
+  \item platform terpadu dalam satu proses Python, tanpa layanan eksternal yang
+        harus dipasang lebih dahulu;
+  \item skema basis data relasional berisi \NumTables{} tabel dan satu view agregat;
+  \item dua jalur penjadwalan yang saling melengkapi: jadwal lokal di perangkat
+        yang tetap berjalan saat jaringan putus, dan jadwal di platform yang dapat
+        diubah pemilik kapan saja lalu dikirim ke perangkat.
+\end{enumerate}
+
+\section{Ruang Lingkup dan Batasan}
+
+Rancangan mencakup perangkat keras node beserta pembagian pin dan catatan dayanya,
+firmware \FwVersion{} pada folder \file{firmware/esp32_feeder}, platform pada folder
+\file{dashboard} (broker tertanam, worker, sweeper, lapisan basis data, dan
+\NumPages{} halaman dashboard), skema basis data pada \file{database/schema.sql},
+serta kontrak protokol MQTT yang mengikat keduanya.
+
+Batasan berikut diambil secara sadar dan berlaku untuk seluruh dokumen.
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Satu perangkat.} Baris perangkat awal adalah \code{\SeedDevice}
+        (\SeedDeviceName), sedangkan firmware menurunkan identitas dari MAC chip
+        sehingga papan kedua muncul sebagai perangkat baru, misalnya
+        \code{\DeviceExample}. Perilaku banyak perangkat belum diuji dan tidak
+        diklaim.
+  \item \textbf{Broker anonim tanpa TLS.} Broker tertanam menerima koneksi tanpa
+        autentikasi dan tanpa enkripsi, sehingga rancangan ini hanya layak untuk
+        satu jaringan lokal tepercaya (\chapref{ch:09-catatan-asumsi}).
+  \item \textbf{SQLite tertanam.} Basis data adalah berkas tunggal \code{\DbFile}
+        dalam mode WAL; tidak ada server basis data terpisah dan tidak ada
+        replikasi.
+  \item \textbf{Jaringan lokal tunggal.} Alamat host dapat berubah karena DHCP,
+        sehingga alamat broker diisi pada berkas \file{secrets.h} yang tidak ikut
+        disimpan di repositori.
+  \item \textbf{Bukan penelitian biologis.} Kualitas air dan pertumbuhan ikan hanya
+        dipakai sebagai alasan perancangan; keduanya tidak diukur maupun diuji.
+\end{itemize}
+
+\section{Daftar Istilah}
+
+Istilah teknis dipertahankan dalam bahasa Inggris karena merupakan nama konsep pada
+protokol dan kode. \tabref{tab:01-istilah} merangkum istilah yang dipakai berulang.
+
+\begin{table}[H]
+\centering
+\caption{Istilah yang dipakai berulang dalam dokumen ini.}
+\label{tab:01-istilah}
+\small
+\begin{tabular}{@{}p{2.7cm}p{11.9cm}@{}}
+\toprule
+\textbf{Istilah} & \textbf{Arti dalam sistem ini} \\
+\midrule
+MQTT & Protokol publish/subscribe yang menghubungkan perangkat dengan platform. \\
+Broker & Server MQTT yang meneruskan pesan antar client; di sini berjalan tertanam
+di dalam proses Python aplikasi. \\
+Retained & Pesan terakhir pada sebuah topik yang disimpan broker dan langsung
+dikirim ke subscriber baru; dipakai hanya untuk topik status. \\
+LWT & \emph{Last Will and Testament}: pesan \code{offline} yang didaftarkan
+perangkat saat connect dan diterbitkan broker ketika koneksi terputus tanpa
+penutupan sesi yang rapi. \\
+topic & Jalur penamaan pesan berbentuk \code{<prefix>/<device_id>/<kind>}, misalnya
+\topic{telemetry}. \\
+QoS & Tingkat jaminan pengiriman MQTT. Arah perintah memakai QoS~1; arah telemetri
+memakai QoS~0. \\
+ack & Balasan perangkat atas satu perintah, memuat \code{command_id},
+\code{result}, dan \code{message}; wajib untuk setiap perintah. \\
+\code{command_id} & Pengenal unik perintah berbentuk \code{cmd-<uuid>} yang di-echo
+perangkat dan menjadi kunci korelasi baris perintah dengan baris riwayat. \\
+hopper & Wadah penampung pakan pada node, diukur ketinggian permukaannya dari atas. \\
+portion & Satuan porsi: satu kali gate terbuka selama \PortionOpenMs{} ms. Satu
+perintah dibatasi 1 sampai 10 porsi. \\
+kalibrasi & Dua jarak acuan sensor, \HopperFull{} cm saat penuh dan \HopperEmpty{}
+cm saat kosong, untuk mengubah jarak menjadi persentase. \\
+WAL & \emph{Write-Ahead Logging}, mode jurnal SQLite yang memungkinkan pembaca dan
+penulis bekerja bersamaan pada satu berkas. \\
+sweeper & Thread berkala yang menandai perintah tanpa ack sebagai \code{timeout}
+dan perangkat yang berhenti mengirim data sebagai offline. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Ringkasan Arsitektur dan Peta Bab}
+
+Sistem terdiri atas dua proses yang bertemu di satu broker. Proses pertama adalah
+node perangkat: satu sketch Arduino berbentuk super-loop tanpa \code{delay()}, yang
+membaca sensor tiap \SensorMs{} ms, menggerakkan servo sebagai state machine,
+menjalankan jadwal harian dari clock lokal, dan mempublikasikan telemetri tiap
+\TelemetryMs{} ms ke topik \topic{telemetry}. Proses kedua adalah platform: satu
+proses Python yang menjalankan broker MQTT tertanam pada \code{\BrokerBind}, worker
+paho yang berlangganan empat jenis topik, sweeper tiap \SweepS{} detik, basis data
+SQLite, dan dashboard Streamlit. Perintah mengalir balik melalui topik
+\topic{command} dengan QoS~1, dan setiap perintah dijawab pada topik \topic{ack}.
+Broker tertanam dipilih agar platform tidak bergantung pada layanan MQTT eksternal;
+bila port sudah dipakai broker lain, platform memakai broker tersebut.
+
+\tabref{tab:01-peta-bab} memetakan isi dokumen. Bab 2 sampai Bab 5 membahas
+subsistem, Bab 6 dan Bab 7 membahas dua kontrak yang mengikatnya, Bab 8 menyatukan
+keduanya beserta matriks ketertelusuran, dan Bab 9 mencatat asumsi serta temuan.
+
+\begin{table}[H]
+\centering
+\caption{Peta bab dan fokus pembahasannya.}
+\label{tab:01-peta-bab}
+\small
+\begin{tabular}{@{}p{1.0cm}p{4.0cm}p{9.6cm}@{}}
+\toprule
+\textbf{Bab} & \textbf{Judul} & \textbf{Fokus} \\
+\midrule
+\chapref{ch:02-arsitektur} & Arsitektur Sistem & Pembagian proses, komponen
+runtime, pembagian thread, aliran data, pemilihan mode broker. \\
+\chapref{ch:03-perangkat-keras} & Perangkat Keras & Blok perangkat keras, daftar
+komponen, skema rangkaian, pembagian pin, timing servo, kalibrasi hopper. \\
+\chapref{ch:04-firmware} & Firmware ESP32 & \code{setup()} dan tick kooperatif,
+state machine gate, NVS, penjadwalan lokal, siklus MQTT, mode degradasi. \\
+\chapref{ch:05-website} & Dashboard Website & Enam halaman, cache baca versus jalur
+tulis, state sesi, internasionalisasi, sweeper, backup dan restore. \\
+\chapref{ch:06-protokol-mqtt} & Protokol MQTT & Tabel topik, pasangan perintah dan
+ack, contoh payload, aturan ack wajib dan \code{timeout}. \\
+\chapref{ch:07-basis-data} & Basis Data & Diagram relasi, kamus data, index, view
+agregat, data awal, kardinalitas, kolom yang tidak dipakai. \\
+\chapref{ch:08-end-to-end} & Alur End-to-End & Perjalanan satu perintah dari klik
+sampai baris basis data berubah, matriks aksi, ketertelusuran. \\
+\chapref{ch:09-catatan-asumsi} & Catatan Asumsi dan Temuan & Empat temuan sisa,
+asumsi lingkungan, batasan keamanan. \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,156 @@
+\chapter{Catatan Asumsi dan Temuan}
+\label{ch:09-catatan-asumsi}
+
+\section{Empat Temuan Sisa}
+
+Bab ini mencatat empat hal yang ditemukan saat rancangan diturunkan dari kode yang
+benar-benar berjalan. Keempatnya bukan kegagalan yang menghentikan sistem: sistem
+berjalan dan seluruh kebutuhan pada \chapref{ch:08-end-to-end} terpenuhi. Yang
+dicatat adalah ketidaksesuaian antara apa yang tampak pada skema atau dokumentasi
+dan apa yang sesungguhnya terjadi saat runtime.
+
+\subsection{Kolom Ambang Pakan Tidak Dipakai Perangkat}
+
+\textbf{Gejala.} Ambang pakan menipis disimpan pada kolom
+\code{low_feed_threshold_pct}, dikirim ke perangkat lewat \code{set_threshold}, dan
+dilaporkan kembali di dalam snapshot \code{get_state}. Namun perangkat tidak pernah
+memakai nilai itu untuk keputusan apa pun; satu-satunya penjagaan level yang dimiliki
+perangkat adalah pemeriksaan apakah persentase sama dengan nol.
+
+\textbf{Dampak.} Mengubah ambang hanya mengubah kapan platform membuat notifikasi
+pakan menipis. Hopper yang tersisa lima persen tetap menjalankan jadwal lokal
+meskipun ambang disetel dua puluh persen, dan nilai ambang pada snapshot perangkat
+dapat disalahartikan sebagai ambang yang berlaku di perangkat.
+
+\textbf{Rekomendasi.} Pilih satu arah yang konsisten: bila ambang ingin ditegakkan di
+perangkat, tambahkan penjagaan pada jalur jadwal dan pakan manual sehingga level di
+bawah ambang melewati pemberian pakan dan dilaporkan sebagai event; bila ambang
+hanya milik platform, hilangkan nilai itu dari snapshot agar tidak menimbulkan kesan
+ikut menentukan.
+
+\subsection{Kolom Penaut Riwayat Terjadwal Selalu Kosong}
+
+\textbf{Gejala.} Tabel \code{feeding_logs} memiliki kolom \code{schedule_id}
+berkunci asing ke \code{schedules} dengan perilaku \code{SET NULL}, tetapi jalur
+penulisan riwayat terjadwal selalu menuliskan null karena event jadwal dari
+perangkat tidak membawa pengenal baris jadwal.
+
+\textbf{Dampak.} Riwayat terjadwal tidak dapat ditautkan kembali ke jadwal yang
+menghasilkannya; halaman History tidak dapat menampilkan nama jadwal untuk baris
+terjadwal. Perilaku \code{SET NULL} yang dirancang untuk menjaga riwayat ketika
+jadwal dihapus tidak pernah terpakai, sehingga sebagian skema tidak pernah diuji
+data nyata.
+
+\textbf{Rekomendasi.} Sertakan pengenal jadwal pada event \code{scheduled_feed},
+karena entri jadwal di perangkat sudah menyimpan nilai itu, lalu isi
+\code{schedule_id} saat handler menulis baris riwayat. Bila penautan tidak
+diinginkan, hapus kolom beserta kunci asingnya agar skema tidak menjanjikan sesuatu
+yang tidak pernah diisi.
+
+\subsection{Status Awal Perintah Tidak Pernah Ditulis}
+
+\textbf{Gejala.} Batasan nilai pada kolom status perintah mengizinkan lima nilai
+termasuk \code{pending}, dan sapuan timeout memeriksa \code{pending} maupun
+\code{sent}, tetapi fungsi penyisipan selalu menuliskan status terkirim bahkan
+sebelum pesan benar-benar dipublikasikan.
+
+\textbf{Dampak.} Nilai \code{pending} tidak pernah muncul pada data nyata. Yang lebih
+penting, tidak ada catatan bahwa sebuah perintah sudah tersimpan tetapi belum keluar
+dari platform; bila publikasi gagal, baris tetap berstatus terkirim sampai batas
+waktu habis.
+
+\textbf{Rekomendasi.} Tulis baris dengan status \code{pending}, publikasikan pesan,
+lalu ubah menjadi \code{sent} setelah publikasi terkonfirmasi, sehingga kegagalan
+publikasi dapat dibedakan dari perangkat yang tidak menjawab. Alternatif yang lebih
+sederhana adalah menghapus nilai itu dari batasan sekaligus dari sapuan.
+
+\subsection{Ambang Offline Ada karena Perilaku Broker Tertanam}
+
+\textbf{Gejala.} Platform menandai perangkat offline setelah \OfflineS{} detik tanpa
+data, dan konfigurasi menyebutkan alasan eksplisitnya: broker tertanam tidak menutup
+sesi client yang diam. Tanpa penanda itu, perangkat yang mati tanpa memutus soket
+akan tetap terlihat online selamanya.
+
+\textbf{Dampak.} Status online pada dashboard adalah kesimpulan platform tentang
+kesegaran data, bukan pernyataan broker tentang keadaan sesi. Perangkat yang hidup
+tetapi berhenti mengirim telemetri akan tampak offline, dan LWT yang datang
+belakangan tidak menambah informasi baru karena statusnya sudah ditetapkan lebih
+dahulu.
+
+\textbf{Rekomendasi.} Aktifkan pemeriksaan keepalive pada broker tertanam sehingga
+sesi yang diam benar-benar ditutup dan LWT diterbitkan tepat waktu, lalu longgarkan
+ambang penanda sebagai lapis kedua. Bila broker tidak dapat diubah, tegaskan pada
+dokumentasi bahwa kolom status berarti ``data terakhir diterima kurang dari
+\OfflineS{} detik lalu'', bukan ``sesi MQTT masih terbuka''.
+
+\section{Asumsi Lingkungan}
+
+\tabref{tab:09-asumsi} memuat asumsi lingkungan yang menjadi dasar rancangan,
+beserta akibatnya bila tidak berlaku. Asumsi yang tidak berlaku biasanya muncul
+sebagai gejala yang membingungkan, bukan sebagai pesan galat yang jelas.
+
+\begin{table}[H]
+\centering
+\caption{Asumsi lingkungan dan akibatnya bila tidak berlaku.}
+\label{tab:09-asumsi}
+\small
+\begin{tabular}{@{}p{3.9cm}p{4.9cm}p{6.2cm}@{}}
+\toprule
+\textbf{Asumsi} & \textbf{Dasar} & \textbf{Akibat bila tidak berlaku} \\
+\midrule
+Perangkat dan host berada pada satu jaringan lokal & Alamat broker diisi langsung
+sebagai alamat IP host & Perangkat tidak dapat menyambung; alamat harus diperbarui
+setiap kali berubah. \\
+Identitas perangkat diturunkan dari MAC & Tiga byte terakhir MAC dipakai sebagai
+akhiran identitas & Papan pengganti menjadi perangkat baru dengan riwayat kosong;
+baris lama tetap ada dan tampak offline. \\
+Satu perangkat per sistem & Baris awal tunggal dan pengujian satu node & Perangkat
+kedua muncul sebagai baris baru; perilaku banyak perangkat belum diuji. \\
+Sistem berkas dapat hilang & Basis data satu berkas di direktori aplikasi & Pada host
+berberkas sementara, basis data dibuat ulang dan diisi data awal setiap kali proses
+dijalankan; riwayat hanya bertahan bila diunduh lebih dahulu. \\
+Waktu dijaga perangkat sendiri & RTC dengan cadangan sel koin dan sinkronisasi NTP &
+Tanpa RTC dan NTP, jadwal lokal tidak berjalan sampai jam disetel dari dashboard. \\
+Broker tidak memerlukan autentikasi & Broker tertanam menerima koneksi anonim & Siapa
+pun di jaringan yang sama dapat mengirim perintah pakan. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Batasan Keamanan}
+
+Rancangan ini tidak memiliki kendali keamanan pada lapisan pesan maupun antarmuka.
+Yang dimaksud bukan hanya ketiadaan TLS, melainkan ketiadaan seluruh mekanisme
+berikut.
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Tanpa autentikasi broker.} Broker menerima koneksi tanpa nama
+        pengguna dan kata sandi. Prefix topik memisahkan proyek, tetapi bukan
+        kontrol akses: siapa pun yang menebak prefix dan identitas perangkat dapat
+        berlangganan telemetri dan mempublikasikan perintah.
+  \item \textbf{Tanpa enkripsi.} Seluruh payload, termasuk pengenal perangkat dan
+        jadwal pakan, melintas sebagai teks pada jaringan.
+  \item \textbf{Tanpa autentikasi dashboard.} Tidak ada halaman masuk dan tidak ada
+        pembedaan pengguna; siapa pun yang menjangkau alamatnya dapat mengirim
+        perintah dan mengubah jadwal.
+  \item \textbf{Tanpa otorisasi per perintah.} Perangkat menjalankan perintah apa pun
+        yang berbentuk benar pada topiknya, tanpa memeriksa asal pengirim.
+  \item \textbf{Tanpa idempotensi.} Perintah yang tiba dua kali akan dijalankan dua
+        kali bila gate sudah kembali idle.
+  \item \textbf{Kredensial di luar repositori.} Nama jaringan dan alamat broker
+        disimpan pada berkas terpisah yang tidak ikut disimpan, tetapi berkas itu
+        tetap berupa teks biasa pada mesin pengembang.
+\end{itemize}
+
+Kesimpulan praktisnya: sistem layak dipakai pada satu jaringan lokal yang seluruh
+penghuninya dipercaya, dan tidak layak dipaparkan ke jaringan publik tanpa
+autentikasi, TLS, serta lapisan otorisasi di depan topik perintah. Batasan ini
+disengaja dan konsisten dengan ruang lingkup pada \chapref{ch:01-pendahuluan}.
+
+\section{Yang Tidak Diklaim Dokumen Ini}
+
+Tiga hal sengaja tidak diklaim. Pertama, dukungan banyak perangkat: skema dan
+protokolnya tidak menghalangi, tetapi belum diuji. Kedua, angka latensi round-trip
+pada jaringan lokal: yang dijamin hanyalah batas atas \CmdTimeoutS{} detik untuk
+setiap perintah. Ketiga, ketahanan terhadap perintah ganda: penjagaan kesibukan gate
+mengurangi kemungkinan, tetapi tidak menghilangkan akibat perintah yang tiba dua kali
+pada waktu berbeda.

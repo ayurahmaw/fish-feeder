@@ -1,0 +1,233 @@
+\chapter{Perangkat Keras}
+\label{ch:03-perangkat-keras}
+
+\section{Gambaran Blok Perangkat Keras}
+
+Node perangkat terdiri atas satu papan pengendali dan empat modul: sensor
+ultrasonik sebagai pengukur jarak, motor servo sebagai penggerak gate pakan, modul
+RTC sebagai penjaga waktu, dan LCD karakter sebagai penampil lokal.
+\figref{fig:hw-block-diagram} menunjukkan hubungan antar blok beserta jenis
+antarmukanya. Semua modul berbagi ground yang sama; yang berbeda adalah jalur
+antarmukanya: sensor memakai dua GPIO diskret, servo memakai satu kanal PWM,
+sedangkan RTC dan LCD berbagi satu bus I\textsuperscript{2}C.
+
+\figuretikz[\linewidth]{hw-block-diagram}{Blok perangkat keras node: papan \BoardName{} dengan
+sensor ultrasonik, motor servo, modul RTC, dan LCD karakter beserta jenis
+antarmukanya.}{fig:hw-block-diagram}
+
+Setiap modul diperiksa keberadaannya saat \code{setup()} dan setiap fungsi
+perangkat keras mengembalikan nilai yang dapat diperiksa pemanggilnya, sehingga
+modul yang tidak terdeteksi hanya menghilangkan kemampuan terkait, bukan
+menghentikan program (\chapref{ch:04-firmware}).
+
+\section{Daftar Komponen}
+
+\tabref{tab:03-bom} memuat komponen prototipe beserta tegangan kerja dan
+antarmukanya. Kolom catatan memuat hal yang paling mudah salah saat perakitan.
+
+\begin{table}[H]
+\centering
+\caption{Daftar komponen node perangkat.}
+\label{tab:03-bom}
+\small
+\begin{tabular}{@{}p{3.2cm}p{1.8cm}p{3.1cm}p{6.3cm}@{}}
+\toprule
+\textbf{Komponen} & \textbf{Tegangan} & \textbf{Antarmuka} & \textbf{Catatan} \\
+\midrule
+\BoardName & 5 V (USB) & USB, WiFi 2.4 GHz & Pengendali utama; regulator papan
+menyuplai 3.3 V untuk modul I\textsuperscript{2}C. \\
+Sensor ultrasonik HC-SR04 & 5 V & 2 GPIO diskret & \code{TRIG} menerima 3.3 V;
+\code{ECHO} mengeluarkan 5 V sehingga wajib dibagi tegangan. \\
+Motor servo SG90 & 5 V & PWM \ServoFreq{} Hz & Jangan diberi 3.3 V; arus stall
+besar saat mulai bergerak. \\
+Modul RTC DS3231 & 3.3 V & I\textsuperscript{2}C \AddrRtc & Butuh sel koin CR2032
+agar waktu bertahan saat daya putus. \\
+LCD1602 + backpack PCF8574 & 3.3 V & I\textsuperscript{2}C \AddrLcd{} atau
+\AddrLcdAlt & Alamat bergantung jumper backpack; dipindai otomatis. \\
+Resistor pembagi & -- & 1 k$\Omega$ dan 2 k$\Omega$ & Menurunkan \code{ECHO} 5 V
+menjadi sekitar 3.3 V. \\
+Kapasitor elektrolit & 5 V & 470--1000 µF & Melintang VCC dan GND servo sebagai
+penahan lonjakan arus. \\
+Sel koin CR2032 & 3 V & Soket DS3231 & Tanpa sel, jam kembali tidak valid setiap
+kali daya putus. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\src{firmware/esp32_feeder/README.md}
+
+\section{Skema Rangkaian}
+
+\figref{fig:hw-schematic} menggambarkan sambungan listrik yang harus dibuat. Tiga
+hal perlu ditekankan karena ketiganya adalah sumber kegagalan yang paling sering
+muncul pada prototipe: pembagi tegangan pada \code{ECHO}, sumber daya servo, dan
+ground bersama.
+
+\figuretikz[\linewidth]{hw-schematic}{Skema rangkaian: pembagi tegangan pada jalur \code{ECHO},
+bus I\textsuperscript{2}C untuk DS3231 dan LCD, serta jalur daya servo.}{fig:hw-schematic}
+
+\subsection{Pembagi Tegangan pada ECHO}
+
+HC-SR04 bekerja pada 5 V dan mengeluarkan pulsa \code{ECHO} setinggi 5 V, sedangkan
+GPIO ESP32 tidak toleran terhadap 5 V. Karena itu jalur \code{ECHO} tidak boleh
+disambung langsung ke \PinEcho. Rangkaian yang dipakai adalah pembagi sederhana:
+\code{ECHO} melewati resistor 1 k$\Omega$ menuju titik sambung, dari titik itu
+resistor 2 k$\Omega$ ke ground, dan titik sambung dihubungkan ke GPIO \PinEcho.
+Dengan rasio itu tegangan 5 V turun menjadi sekitar 3.3 V. Gejala khas bila pembagi
+ini terlewat adalah jarak yang selalu tidak valid atau pin yang rusak setelah
+beberapa lama pemakaian.
+
+\begin{warnbox}
+\code{ECHO} pada HC-SR04 adalah keluaran 5 V, sedangkan GPIO \PinEcho{} tidak
+\emph{5 V tolerant}. Pembagi 1 k$\Omega$ / 2 k$\Omega$ bukan pilihan opsional,
+melainkan bagian dari rangkaian.
+\end{warnbox}
+
+\subsection{Daya Servo}
+
+SG90 menarik arus kecil saat diam, tetapi arus stall-nya sekitar 700 mA pada 5 V dan
+lonjakan itu terjadi tepat saat gate mulai membuka atau menutup. Bila servo diberi
+daya dari jalur 5 V papan yang juga memberi daya ESP32 lewat USB, lonjakan tersebut
+menurunkan tegangan suplai sesaat dan papan dapat melakukan brownout reset. Gejalanya
+khas: papan restart setiap kali servo bergerak dan log serial mengulang urutan
+inisialisasi. Mitigasinya adalah suplai 5 V terpisah dengan ground disatukan, serta
+kapasitor elektrolit 470--1000 µF melintang VCC dan GND servo. Menghubungkan VCC
+servo ke pin 3.3 V bukan mitigasi, melainkan kesalahan yang lebih parah.
+
+\subsection{Bus I\textsuperscript{2}C}
+
+DS3231 dan LCD berbagi SDA pada \PinSda{} dan SCL pada \PinScl. Bus berjalan pada
+\IicClock{} karena firmware tidak memanggil \code{Wire.setClock()}, sehingga
+kecepatan mengikuti nilai bawaan pustaka. Modul DS3231 dan backpack PCF8574 umumnya
+sudah menyertakan resistor pull-up pada papannya; bila keduanya terpasang, kedua
+pasangan pull-up berada paralel dan bus tetap bekerja. Pull-up tambahan hanya
+diperlukan bila salah satu modul berupa papan telanjang.
+
+\section{Pembagian Pin}
+
+\figref{fig:hw-pinout} memetakan pin yang dipakai pada papan 30 pin, dan
+\tabref{tab:03-pin} merinci makro firmware, GPIO, fungsi, arah, level, serta
+catatannya. Tabel ini adalah padanan langsung dari \file{config.h}, sehingga
+perubahan pin cukup dilakukan di satu tempat itu.
+
+\figuretikz[\linewidth]{hw-pinout}{Peta pin papan \BoardName{} yang dipakai node perangkat.}{fig:hw-pinout}
+
+\begin{table}[H]
+\centering
+\caption{Pembagian pin node perangkat.}
+\label{tab:03-pin}
+\small
+\begin{tabular}{@{}p{2.0cm}p{1.1cm}p{2.6cm}p{1.2cm}p{1.9cm}p{4.6cm}@{}}
+\toprule
+\textbf{Makro} & \textbf{GPIO} & \textbf{Fungsi} & \textbf{Arah} & \textbf{Level} &
+\textbf{Catatan} \\
+\midrule
+\code{PIN_SERVO} & \PinServo & PWM SG90 & keluar & 3.3 V & Pulsa
+\ServoMinUs--\ServoMaxUs{} µs. \\
+\code{PIN_TRIG} & \PinTrig & Trigger HC-SR04 & keluar & 3.3 V & Diberi nilai rendah
+saat inisialisasi. \\
+\code{PIN_ECHO} & \PinEcho & Echo HC-SR04 & masuk & 5 V dibagi & Wajib melalui
+pembagi 1 k$\Omega$ / 2 k$\Omega$. \\
+\code{PIN_SDA} & \PinSda & I\textsuperscript{2}C data & dua arah & 3.3 V &
+Open-drain; DS3231 dan LCD. \\
+\code{PIN_SCL} & \PinScl & I\textsuperscript{2}C clock & keluar & 3.3 V & Jam bus
+\IicClock. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\src{firmware/esp32_feeder/config.h}
+
+\tabref{tab:03-pin-terlarang} memuat pin yang tidak boleh dipakai, baik karena sudah
+dipakai fungsi internal papan maupun karena tidak tersedia pada modul 30 pin.
+Daftar ini bukan catatan teoretis: memakai GPIO 6 sampai 11, misalnya, akan
+menghalangi papan melakukan boot karena pin tersebut terhubung ke flash SPI.
+
+\begin{table}[H]
+\centering
+\caption{Pin yang tidak boleh dipakai pada papan 30 pin.}
+\label{tab:03-pin-terlarang}
+\small
+\begin{tabular}{@{}p{1.8cm}p{2.8cm}p{9.9cm}@{}}
+\toprule
+\textbf{GPIO} & \textbf{Status} & \textbf{Alasan} \\
+\midrule
+6--11 & terlarang & Terhubung ke flash SPI internal yang dipakai papan membaca
+program. \\
+1, 3 & terlarang & UART0 yang dipakai jembatan USB-serial CH340 untuk unggah program
+dan log serial. \\
+0, 2, 12, 15 & terlarang & Pin boot strapping; GPIO 2 sekaligus terhubung ke LED
+bawaan papan. \\
+34--39 & terlarang & Masukan saja, tanpa pull-up internal dan tanpa keluaran. \\
+20, 24, 28--31 & tidak tersedia & Tidak dibawa keluar pada modul 30 pin. \\
+2, 4, 12, 14, 15, 16, 17, 19, 23, 25, 26, 27, 32, 33, 34, 35, 36, 39 & tidak
+dipakai & Sisa pin modul yang bebas untuk penambahan, dengan memperhatikan baris di
+atas. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Timing Servo}
+
+Gate digerakkan sebagai urutan buka, tutup, jeda, dan ulang, bukan satu gerakan
+panjang. \tabref{tab:03-timing} merangkum parameter waktunya; semuanya diambil dari
+\file{config.h}.
+
+\begin{table}[H]
+\centering
+\caption{Parameter timing gate pakan dan pensinyalan servo.}
+\label{tab:03-timing}
+\small
+\begin{tabular}{@{}p{4.6cm}p{2.4cm}p{7.5cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Nilai} & \textbf{Arti} \\
+\midrule
+\code{PORTION_OPEN_MS} & \PortionOpenMs{} ms & Lama gate terbuka untuk satu porsi. \\
+\code{SERVO_SETTLE_MS} & \SettleMs{} ms & Jeda setelah gate ditutup agar mekanik
+berhenti. \\
+\code{PORTION_GAP_MS} & \GapMs{} ms & Jeda antar porsi dalam satu perintah. \\
+Siklus per porsi & \PortionCycleMs{} ms & Waktu buka ditambah settle; satuan durasi
+total. \\
+\code{SERVO_MIN_US} & \ServoMinUs{} µs & Lebar pulsa untuk sudut minimum. \\
+\code{SERVO_MAX_US} & \ServoMaxUs{} µs & Lebar pulsa untuk sudut maksimum. \\
+Frekuensi PWM & \ServoFreq{} Hz & Periode 20 ms, sesuai servo analog. \\
+Sudut tertutup & \ServoClosedDeg\textdegree & Posisi gate menutup aliran pakan. \\
+Sudut terbuka & \ServoOpenDeg\textdegree & Posisi gate membuka aliran pakan. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\src{firmware/esp32_feeder/config.h}
+
+Durasi satu perintah pakan adalah $N \times \PortionCycleMs + (N-1) \times \GapMs$
+milidetik untuk $N$ porsi: satu porsi memerlukan \PortionCycleMs{} ms, dua porsi
+menambahkan satu jeda \GapMs{} ms, dan sepuluh porsi menambahkan sembilan jeda.
+Angka itu batas bawah, karena setelah gate terakhir menutup firmware masih mengukur
+ulang jarak, mempublikasikan telemetri, lalu mengirim ack. Karena itu ack selalu
+mencerminkan keadaan hopper sesudah pemberian pakan, bukan sebelum.
+
+\section{Kalibrasi Hopper}
+
+Sensor mengukur jarak dari mulut hopper ke permukaan pakan, sehingga nilainya
+berbanding terbalik dengan isi hopper. Konversi memakai dua titik acuan, yaitu
+\HopperFull{} cm saat penuh dan \HopperEmpty{} cm saat kosong, dengan rentang
+efektif \HopperSpan{} cm. Rumus yang dipakai firmware maupun platform adalah
+
+\begin{center}
+\PctFormula
+\end{center}
+
+dengan $d$ jarak terukur dalam sentimeter; hasilnya dibatasi 0 sampai 100. Untuk
+jarak 10 cm, selisih terhadap jarak kosong adalah 7 cm dari rentang \HopperSpan{}
+cm, sehingga hasilnya \PctAtTenCm{} persen. Angka itu penting sebagai pembanding:
+dengan kalibrasi lain, jarak yang sama menghasilkan persentase yang berbeda jauh.
+Karena itu nilai \HopperFull{} dan \HopperEmpty{} di firmware, di skema basis data,
+dan di baris \code{devices} dijaga tetap sama; platform memakai nilai di basis data,
+firmware memakai nilai di \file{config.h}, dan keduanya harus diubah bersama.
+
+Pembacaan di atas \MaxDistance{} cm dianggap tidak valid karena di luar rentang itu
+pantulan ultrasonik tidak dapat dipercaya. Pada keadaan itu firmware mengirim
+telemetri berstatus \code{error} tanpa field \code{distance_cm}, dan platform
+menyimpan baris telemetri tanpa persentase. Pembacaan tidak valid tidak boleh
+diperlakukan sebagai nol persen, karena nol persen berarti hopper kosong dan memicu
+notifikasi yang berbeda.

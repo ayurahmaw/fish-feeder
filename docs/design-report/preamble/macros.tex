@@ -1,0 +1,66 @@
+% Makro bantu. Dimuat setelah packages.tex, colors.tex, facts.tex.
+
+% --- Metadata dokumen ------------------------------------------------------
+\newcommand{\reporttitle}{Laporan Desain Sistem Pemberi Pakan Ikan Otomatis}
+\newcommand{\reportauthor}{Proyek Akhir — Autofeeder Aquaponik}
+\newcommand{\reportsubject}{ESP32, MQTT, SQLite, Streamlit}
+
+\hypersetup{
+  pdftitle={\reporttitle},
+  pdfauthor={\reportauthor},
+  pdfsubject={\reportsubject},
+  pdfkeywords={ESP32, MQTT, SQLite, Streamlit, autofeeder, aquaponik}
+}
+
+% --- Mode keluaran ---------------------------------------------------------
+% Diatur oleh wrapper: \standalonetrue (mandiri) atau \standalonefalse (lampiran).
+% (dideklarasikan di wrapper sebelum preamble dimuat)
+
+% --- Teks teknis -----------------------------------------------------------
+% \code memakai \detokenize sehingga garis bawah dan kurung tidak perlu di-escape:
+%   \code{feed_level_pct}  -> feed_level_pct
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+% Topik MQTT lengkap: \topic{telemetry} -> feeder-ayurahmaw/feeder-64008c/telemetry
+\newcommand{\topic}[1]{\texttt{\TopicPrefix/\DeviceExample/\detokenize{#1}}}
+
+% Topik dengan segmen bebas: \topicof{feeder01/ack}
+\newcommand{\topicof}[1]{\texttt{\TopicPrefix/\detokenize{#1}}}
+
+% Nama berkas / path.
+\newcommand{\file}[1]{\texttt{\detokenize{#1}}}
+
+% --- Gambar ---------------------------------------------------------------
+% Hasil render Mermaid (SVG -> PDF) ada di assets/diagrams/pdf/
+\newcommand{\mmdfig}[1]{assets/diagrams/pdf/#1}
+% Hasil compile TikZ standalone ada di assets/tikz/build/
+\newcommand{\tikzfig}[1]{assets/tikz/build/#1}
+
+% Gambar standar: \figureasset[lebar]{berkas}{caption}{label}
+% Tinggi dibatasi 0.88\textheight agar diagram yang tinggi tidak meluber ke halaman
+% berikutnya; keepaspectratio menjaga proporsi.
+\newcommand{\figureasset}[4][\linewidth]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=#1,height=0.88\textheight,keepaspectratio]{\mmdfig{#2}}
+    \caption{#3}
+    \label{#4}
+  \end{figure}%
+}
+\newcommand{\figuretikz}[4][\linewidth]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=#1,height=0.88\textheight,keepaspectratio]{\tikzfig{#2}}
+    \caption{#3}
+    \label{#4}
+  \end{figure}%
+}
+
+% Rujukan singkat.
+\newcommand{\figref}[1]{Gambar~\ref{#1}}
+\newcommand{\tabref}[1]{Tabel~\ref{#1}}
+\newcommand{\chapref}[1]{Bab~\ref{#1}}
+
+% --- Provenance -----------------------------------------------------------
+% Jejak ke kode: \src{firmware/esp32\_feeder/config.h}  (pakai \detokenize)
+\newcommand{\src}[1]{\par\smallskip{\footnotesize\color{muted}Sumber: \texttt{\detokenize{#1}}}\par}

@@ -1,0 +1,214 @@
+\chapter{Protokol MQTT}
+\label{ch:06-protokol-mqtt}
+
+\section{Kerangka Topik dan Penamaan}
+
+Seluruh pesan bergerak pada topik dengan tiga segmen: prefix proyek, identitas
+perangkat, dan jenis pesan. Prefix bawaan adalah \code{\TopicPrefix}, identitas
+perangkat diturunkan dari MAC chip sehingga berbentuk
+\code{<\DeviceIdPrefix>-<tiga byte terakhir>} seperti \code{\DeviceExample}, dan
+jenis pesan adalah salah satu dari \code{status}, \code{telemetry}, \code{ack},
+\code{state}, atau \code{command}. Contoh topik lengkap untuk perangkat contoh
+adalah \topic{telemetry}. Baris perangkat awal di basis data memakai identitas
+\code{\SeedDevice}, sehingga topiknya berbentuk \topicof{\SeedDevice/ack}.
+
+Tiga segmen itu bukan sekadar konvensi penamaan. Worker platform memecah topik
+menjadi tepat tiga bagian dan membuang pesan yang jumlah segmennya berbeda atau
+yang prefix-nya tidak cocok, sehingga topik dari proyek lain pada broker yang sama
+tidak pernah masuk ke basis data. Perangkat melakukan penyaringan sebaliknya:
+hanya pesan pada topik perintah miliknya sendiri yang diproses, dan seluruh pesan
+lain diabaikan tanpa jawaban.
+
+\section{Tabel Topik}
+
+\tabref{tab:06-topik} adalah rujukan tunggal untuk semua topik yang dipakai
+sistem. Perhatikan bahwa hanya topik status yang memakai pesan retained; sisanya
+tidak, karena telemetri, ack, dan event bersifat peristiwa yang tidak boleh
+diputar ulang kepada subscriber baru.
+
+\begin{table}[H]
+\centering
+\caption{Topik MQTT, arah, tanda retained, QoS, dan isi payload.}
+\label{tab:06-topik}
+\small
+\begin{tabular}{@{}p{1.6cm}p{2.7cm}p{1.2cm}p{1.5cm}p{6.9cm}@{}}
+\toprule
+\textbf{Kind} & \textbf{Arah} & \textbf{Retain} & \textbf{QoS} & \textbf{Payload} \\
+\midrule
+\code{status} & perangkat ke platform & ya & 0 & String \code{online} saat
+connect dan \code{offline} sebagai LWT. Bukan JSON. \\
+\code{telemetry} & perangkat ke platform & tidak & 0 & JSON berisi identitas,
+state, jarak, persentase, dan waktu. \\
+\code{ack} & perangkat ke platform & tidak & 0 & JSON berisi
+\code{command_id}, hasil, pesan, dan waktu. \\
+\code{state} & perangkat ke platform & tidak & 0 & JSON event
+\code{scheduled_feed} yang dipicu perangkat sendiri. \\
+\code{command} & platform ke perangkat & tidak & 1 & JSON berisi
+\code{command_id}, tipe, payload, dan waktu. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\src{firmware/esp32_feeder/net.cpp, dashboard/mqtt.py}
+
+Asimetri QoS perlu dicatat karena sering disalahpahami. Perangkat mempublikasikan
+dengan QoS~0 tetapi berlangganan perintah dengan QoS~1; platform mempublikasikan
+perintah dengan QoS~1 tetapi berlangganan dengan QoS~0. Artinya jaminan
+pengiriman hanya diberikan pada arah perintah, yaitu arah yang tidak boleh hilang.
+Pada arah telemetri, kehilangan satu sampel tidak merusak apa pun karena sampel
+berikutnya datang \TelemetryMs{} ms kemudian, dan keandalan yang sebenarnya
+diperiksa pada lapisan aplikasi lewat ack, bukan pada lapisan transport.
+
+\section{Contoh Payload}
+
+Payload telemetri memuat jarak mentah dan persentase hasil hitung firmware. Field
+yang nilainya tidak diketahui dihilangkan, bukan diisi nol, sehingga platform dapat
+membedakan ``jarak tidak terbaca'' dari ``hopper kosong''.
+
+\begin{lstlisting}[style=report]
+{"device":"feeder-64008c","state":"idle","distance_cm":10.0,
+ "feed_level_pct":50,"ts":"2026-11-19T13:00:00"}
+\end{lstlisting}
+
+Nilai \code{state} hanya boleh salah satu dari \code{idle}, \code{feeding}, atau
+\code{error}. Nilai \code{error} dipakai ketika pembacaan jarak tidak valid,
+sehingga dashboard dapat menampilkan keadaan yang jujur alih-alih angka yang
+kebetulan tersisa dari pengukuran lama.
+
+Event jadwal dipublikasikan setelah perangkat mengeksekusi jadwalnya sendiri.
+Jarak pada event diukur sesudah pemberian pakan, dan justru itu gunanya: platform
+memakai baris telemetri terakhir sebagai level sebelum, dan jarak pada event
+sebagai level sesudah.
+
+\begin{lstlisting}[style=report]
+{"event":"scheduled_feed","device":"feeder-64008c","portions":2,
+ "feed_time":"07:00:00","distance_cm":14.8,"ts":"2026-11-19T07:00:01"}
+\end{lstlisting}
+
+Ack adalah pesan yang mengikat perintah dengan hasilnya. Field \code{command_id}
+harus sama persis dengan yang diterima, karena nilai itulah satu-satunya kunci
+korelasi yang dimiliki platform.
+
+\begin{lstlisting}[style=report]
+{"command_id":"cmd-ed239f2b-f305-46e6-8998-4fa7a4492986",
+ "result":"ok","message":"feeding 2 portions","ts":"2026-11-19T13:50:19"}
+\end{lstlisting}
+
+Perintah yang dikirim platform membawa tipe dan payload bertingkat, sehingga
+penambahan field pada satu tipe tidak mengubah bentuk pesan tipe lain.
+
+\begin{lstlisting}[style=report]
+{"command_id":"cmd-ed239f2b-f305-46e6-8998-4fa7a4492986",
+ "type":"manual_feed","payload":{"portions":2},
+ "timestamp":"2026-11-19T13:50:18Z"}
+\end{lstlisting}
+
+\section{Perintah dan Ack}
+
+Ada enam tipe perintah, dan setiap tipe memiliki urutan pemeriksaan yang tetap.
+Urutan itu bukan detail implementasi: ia menentukan kode hasil mana yang diterima
+pengguna ketika dua masalah terjadi sekaligus. Sebagai contoh, permintaan pakan
+saat gate masih bergerak selalu dijawab \code{error_busy}, bukan
+\code{error_low_level}, karena pemeriksaan kesibukan dilakukan lebih dahulu.
+\tabref{tab:06-command} memuat keenam tipe beserta payload, urutan penjagaan, dan
+hasil suksesnya.
+
+\begin{table}[H]
+\centering
+\caption{Perintah, payload, urutan penjagaan, dan hasil yang diharapkan.}
+\label{tab:06-command}
+\small
+\begin{tabular}{@{}p{2.7cm}p{2.8cm}p{4.9cm}p{3.9cm}@{}}
+\toprule
+\textbf{Tipe} & \textbf{Payload} & \textbf{Penjagaan (berurutan)} & \textbf{Hasil sukses} \\
+\midrule
+\code{servo_test} & \code{angle} bernilai 0 atau 90 & Sudut selain 0 atau 90
+menghasilkan \code{error_bad_payload}; gate sibuk menghasilkan
+\code{error_busy}; servo tidak terpasang menghasilkan \code{error_servo}. &
+\code{ok} dengan pesan sudut yang dituju. \\
+\code{manual_feed} & \code{portions} 1 sampai 10 & Gate sibuk menghasilkan
+\code{error_busy}; servo tidak terpasang menghasilkan \code{error_servo}; level
+nol menghasilkan \code{error_low_level}. & \code{ok} setelah porsi terakhir
+selesai. \\
+\code{set_schedule} & Array jadwal aktif & Payload yang gagal di-parse
+menghasilkan \code{error_bad_payload}. & \code{ok} dengan jumlah jadwal
+tersimpan. \\
+\code{set_threshold} & \code{threshold_pct} 0 sampai 100 & Nilai di luar rentang
+menghasilkan \code{error_bad_payload}. & \code{ok} dengan ambang yang dipakai. \\
+\code{set_rtc} & \code{datetime} berbentuk ISO tanpa zona waktu & Format yang
+gagal di-parse menghasilkan \code{error_bad_payload}. & \code{ok}; bila RTC tidak
+ada, pesan menyebutkan pemakaian jam internal. \\
+\code{get_state} & Objek kosong & Tidak ada penjagaan khusus. & \code{ok} dengan
+snapshot keadaan di dalam field \code{message}. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\src{firmware/esp32_feeder/esp32_feeder.ino, firmware/esp32_feeder/README.md}
+
+Empat aturan berikut berlaku untuk semua tipe tanpa kecuali.
+
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Ack wajib.} Setiap perintah yang diterima harus dijawab, baik
+        berhasil maupun gagal. Diam bukan jawaban yang sah: perangkat yang diam
+        membuat pengguna menunggu tanpa kepastian selama \CmdTimeoutS{} detik.
+  \item \textbf{\code{command_id} di-echo apa adanya.} Platform tidak memakai
+        urutan kedatangan atau isi payload untuk mencocokkan jawaban; hanya
+        \code{command_id} yang dipakai.
+  \item \textbf{Batas waktu \CmdTimeoutS{} detik.} Jawaban yang datang setelah
+        batas itu sudah tidak relevan karena perintahnya sudah ditandai
+        \code{timeout} oleh sweeper.
+  \item \textbf{Hanya topik perintah yang diproses.} Pesan pada topik lain
+        diabaikan tanpa jawaban, termasuk pesan retained milik topik status yang
+        mungkin ikut terkirim oleh broker tertanam.
+\end{enumerate}
+
+\section{Kode Hasil dan Artinya bagi Platform}
+
+\tabref{tab:06-result} memetakan setiap kode hasil ke tindakan platform. Yang perlu
+diperhatikan adalah bahwa semua kode selain \code{ok} diperlakukan sama oleh
+platform, yaitu kegagalan yang disertai notifikasi; pemilahan lebih lanjut hanya
+terjadi pada teks pesan yang disimpan untuk penelusuran.
+
+\begin{table}[H]
+\centering
+\caption{Kode hasil pada ack dan tindakan platform.}
+\label{tab:06-result}
+\small
+\begin{tabular}{@{}p{3.4cm}p{4.6cm}p{7.0cm}@{}}
+\toprule
+\textbf{Kode hasil} & \textbf{Arti} & \textbf{Tindakan platform} \\
+\midrule
+\code{ok} & Perintah dijalankan & Perintah dan riwayat pakan ditandai sukses;
+level sesudah diambil dari telemetri terakhir. \\
+\code{error_bad_payload} & Payload tidak sesuai kontrak & Perintah ditandai
+gagal; pesan perangkat disimpan pada kolom hasil. \\
+\code{error_busy} & Gate sedang menjalankan porsi lain & Ditandai gagal; pengguna
+dapat mengirim ulang setelah pemberian pakan sebelumnya selesai. \\
+\code{error_servo} & Servo tidak terpasang & Ditandai gagal dan memunculkan
+notifikasi pemberian pakan gagal. \\
+\code{error_low_level} & Hopper terbaca kosong & Ditandai gagal dan
+memunculkan notifikasi pemberian pakan gagal. \\
+\code{error_unknown_type} & Tipe perintah tidak dikenal perangkat & Ditandai
+gagal; menunjukkan ketidaksesuaian versi antara platform dan firmware. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Pesan yang tidak pernah sampai ke perangkat tidak menghasilkan kode apa pun.
+Kasus itu seluruhnya ditangani oleh sweeper: perintah berubah menjadi
+\code{timeout} dan riwayat pakan terkait menjadi gagal dengan pesan
+\code{timeout}. Dengan pembagian ini, setiap perintah yang pernah dikirim platform
+berakhir pada salah satu dari empat status, yaitu sukses, gagal, timeout, atau
+masih berjalan, dan tidak ada perintah yang menggantung tanpa status.
+
+\section{Batas Kontrak}
+
+Kontrak ini tidak memiliki mekanisme idempotensi. Bila perangkat menerima
+perintah yang sama dua kali, misalnya karena pengiriman ulang setelah koneksi
+terputus, gate akan bergerak dua kali. Rancangan mengandalkan tiga hal untuk
+membatasinya: QoS~1 hanya pada arah perintah, uuid per perintah yang dibuat baru
+setiap kali pengguna menekan tombol, dan penjagaan kesibukan pada gate yang
+menolak perintah kedua selama porsi pertama masih berjalan. Ketiganya mengurangi
+kemungkinan, bukan menghilangkannya, dan keterbatasan ini dicatat pada
+\chapref{ch:09-catatan-asumsi}.

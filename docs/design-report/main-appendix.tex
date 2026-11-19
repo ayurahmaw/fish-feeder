@@ -1,0 +1,26 @@
+\documentclass[11pt,a4paper,oneside]{report}
+
+% Mode keluaran: lampiran siap tempel ke laporan TA.
+\newif\ifstandalone
+\standalonefalse
+
+\input{preamble/packages}
+\input{preamble/colors}
+\input{preamble/facts}
+\input{preamble/macros}
+
+\begin{document}
+
+% Dokumen ini adalah lampiran: sebut bab sebagai "Lampiran", bukan "Bab".
+\renewcommand{\chaptername}{Lampiran}
+
+% Nomor bab/gambar/tabel menjadi A, B, C, ... dan A.1, A.2, ...
+\renewcommand{\thechapter}{\Alph{chapter}}
+\renewcommand{\thesection}{\Alph{chapter}.\arabic{section}}
+\renewcommand{\thesubsection}{\Alph{chapter}.\arabic{section}.\arabic{subsection}}
+\renewcommand{\thefigure}{\Alph{chapter}.\arabic{figure}}
+\renewcommand{\thetable}{\Alph{chapter}.\arabic{table}}
+
+\input{report-body}
+
+\end{document}

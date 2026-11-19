@@ -1,0 +1,238 @@
+\chapter{Dashboard Website}
+\label{ch:05-website}
+
+\section{Peran dan Kerangka Dashboard}
+
+Dashboard adalah satu-satunya antarmuka manusia pada sistem ini: ia menampilkan
+keadaan yang sudah tersimpan di basis data dan mengirim perintah ke perangkat
+melalui broker. Dashboard tidak berbicara langsung ke perangkat, tidak menyimpan
+keadaan di memorinya sendiri, dan tidak menghitung apa pun yang tidak dapat
+dihitung ulang dari basis data. Semua pembacaan menuju \code{\DbFile}; semua
+penulisan yang memengaruhi perangkat melewati satu fungsi pengiriman perintah.
+
+Halaman dijalankan oleh Streamlit \StreamlitVersion{} (minimum \StreamlitMin)
+dengan \NumPages{} halaman yang dipilih dari sidebar. Sebelum halaman mana pun
+dirender, kerangka aplikasi menetapkan tiga hal: runtime (broker, worker, sweeper)
+diambil dari singleton proses, daftar perangkat dibaca dari basis data, dan
+perangkat terpilih disimpan di state sesi. Bila basis data belum berisi satu
+perangkat pun, aplikasi berhenti dengan pesan galat alih-alih menampilkan halaman
+kosong. \figref{fig:web-flowchart} menunjukkan alur itu, dan
+\figref{fig:web-seq-bootstrap} menempatkannya sebagai urutan pesan.
+
+\figureasset[\linewidth]{web-flowchart}{Alur dashboard: pemilihan perangkat dari sidebar,
+pemeriksaan ketersediaan perangkat, lalu penyajian salah satu dari enam
+halaman.}{fig:web-flowchart}
+
+\figureasset[\linewidth]{web-seq-bootstrap}{Urutan penyalaan sesi dashboard: aplikasi membaca
+daftar perangkat, pengguna memilih satu perangkat, lalu halaman aktif
+dirender.}{fig:web-seq-bootstrap}
+
+\section{Enam Halaman}
+
+\tabref{tab:05-halaman} merinci isi setiap halaman dan tindakan yang menulis ke
+basis data. Hanya tiga halaman yang menulis: Alerts (menandai notifikasi dibaca),
+Schedules (mengubah jadwal dan mengirimkannya), dan Control (mengirim perintah).
+
+\begin{table}[H]
+\centering
+\caption{Enam halaman dashboard, isinya, dan aksi tulisnya.}
+\label{tab:05-halaman}
+\small
+\begin{tabular}{@{}p{1.8cm}p{7.1cm}p{6.1cm}@{}}
+\toprule
+\textbf{Halaman} & \textbf{Isi} & \textbf{Aksi tulis} \\
+\midrule
+Status & Sisa pakan, jarak sensor, state perangkat, dan penanda dalam jaringan, dari
+view \code{v_device_status}. & Tidak ada. \\
+Live & Grafik sisa pakan untuk rentang 1, 6, atau 24 jam dan tabel \LiveTail{} pesan
+MQTT terakhir dari buffer memori worker. & Tidak ada. \\
+Alerts & Notifikasi pakan menipis, pakan habis, pemberian pakan gagal, dan perangkat
+offline. & Menandai satu atau semua notifikasi dibaca. \\
+History & Riwayat pemberian pakan 1, 7, atau 30 hari beserta level sebelum dan
+sesudah, jenis pemicu, dan status. & Tidak ada. \\
+Schedules & Daftar jadwal; tambah, ubah, hapus, aktifkan atau nonaktifkan; kirim
+jadwal aktif ke perangkat. & Menulis \code{schedules} lalu mengirim
+\code{set_schedule}. \\
+Control & Pakan manual, permintaan state, ambang notifikasi, penyetelan jam, dan uji
+servo. & Menulis \code{commands} dan \code{feeding_logs}; mengubah ambang dan zona
+waktu di \code{devices}. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Jalur Baca dan Jalur Tulis}
+
+Pembacaan melewati \file{dashboard/data.py} yang membungkus kueri dengan cache
+berdurasi pendek, sedangkan penulisan tidak pernah melewati cache: setiap aksi tulis
+mengosongkan cache dan memicu render ulang (\tabref{tab:05-cache}).
+
+\begin{table}[H]
+\centering
+\caption{Lapisan baca dan tulis pada dashboard.}
+\label{tab:05-cache}
+\small
+\begin{tabular}{@{}p{3.2cm}p{5.0cm}p{6.8cm}@{}}
+\toprule
+\textbf{Lapisan} & \textbf{Mekanisme} & \textbf{Tujuan} \\
+\midrule
+Baca berulang & Cache dua detik pada seluruh fungsi baca di \file{data.py} &
+Menahan agar penyegaran otomatis tidak menjalankan kueri yang sama berkali-kali. \\
+Penyegaran otomatis & Fragmen halaman berulang tiap dua detik pada Status, Live, dan
+Schedules & Menampilkan data baru tanpa memuat ulang seluruh halaman. \\
+Penyegaran manual & Tombol muat ulang mengosongkan cache lalu meminta render ulang &
+Memberi pengguna kendali ketika data harus segar seketika. \\
+Tulis & Aksi memanggil pengiriman perintah atau kueri tulis, lalu mengosongkan cache
+& Menjamin halaman berikutnya membaca hasil tulisan sendiri. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+State sesi dipakai untuk dua hal saja: kode perangkat terpilih dan pilihan bahasa.
+Keduanya per sesi peramban, sehingga dua pengguna tidak saling mengubah pilihan
+perangkat. Karena basis data dan broker dipakai bersama, perubahan satu pengguna
+terlihat oleh pengguna lain pada penyegaran berikutnya.
+
+\begin{notebox}
+Dashboard tidak memiliki autentikasi: siapa pun yang dapat membuka alamatnya dapat
+mengirim perintah pakan. Batasan ini konsisten dengan asumsi jaringan lokal pada
+\chapref{ch:01-pendahuluan} dan akibatnya dicatat pada
+\chapref{ch:09-catatan-asumsi}.
+\end{notebox}
+
+\section{Keadaan Perintah di Antarmuka}
+
+\figref{fig:web-state-command} memodelkan apa yang dialami pengguna setelah menekan
+tombol pengirim perintah. Ada empat keadaan akhir: sukses, gagal dengan pesan dari
+perangkat, tidak pernah dijawab sehingga ditandai \code{timeout}, atau gagal
+dikirim sebelum pesan keluar dari platform. Keempatnya terlihat berbeda, dan keadaan
+``dikirim'' tidak pernah berarti ``berhasil''. Karena itu halaman Control
+menampilkan pengenal perintah setelah tombol ditekan, bukan pesan sukses.
+
+\figureasset[\linewidth]{web-state-command}{Keadaan perintah di antarmuka: perintah disusun,
+baris basis data ditulis, pesan dipublikasikan, lalu menunggu ack sampai batas
+\CmdTimeoutS{} detik.}{fig:web-state-command}
+
+\section{Alur Fitur}
+
+Lima alur berikut adalah alur yang paling sering dipakai, digambarkan sebagai
+urutan pesan antara peramban, aplikasi, basis data, broker, dan perangkat.
+
+\subsection{Pemberian Pakan Manual yang Berhasil}
+
+Pengguna memilih jumlah porsi pada halaman Control dan mengonfirmasi lewat dialog.
+Aplikasi menulis baris perintah dan baris riwayat pakan dalam satu transaksi,
+mempublikasikan perintah dengan QoS~1, lalu menunggu. Perangkat mengeksekusi porsi
+satu per satu, dan setelah porsi terakhir mengukur ulang jarak, mengirim telemetri,
+lalu mengirim ack. Aplikasi menandai keduanya sukses dan mengisi level sesudah dari
+telemetri terakhir (\figref{fig:web-seq-manual-feed-ok}).
+
+\figureasset[\linewidth]{web-seq-manual-feed-ok}{Urutan pemberian pakan manual yang berhasil,
+dari klik tombol sampai baris riwayat pakan berstatus sukses.}{fig:web-seq-manual-feed-ok}
+
+\subsection{Pemberian Pakan Manual yang Gagal}
+
+Kegagalan datang dari perangkat sebagai ack dengan hasil selain \code{ok}, misalnya
+\code{error_servo} ketika servo tidak terpasang atau \code{error_low_level} ketika
+hopper terbaca kosong. Aplikasi menandai perintah dan riwayat gagal, lalu membuat
+notifikasi \code{feed_failed} berkategori kritis
+(\figref{fig:web-seq-manual-feed-fail}). Kegagalan berbentuk tidak adanya jawaban
+tidak diselesaikan jalur ack, melainkan oleh sweeper setelah \CmdTimeoutS{} detik.
+
+\figureasset[\linewidth]{web-seq-manual-feed-fail}{Urutan pemberian pakan manual yang gagal:
+ack berisi kode kesalahan membuat perintah dan riwayat ditandai gagal serta
+memunculkan notifikasi.}{fig:web-seq-manual-feed-fail}
+
+\subsection{Menyinkronkan Jadwal ke Perangkat}
+
+Halaman Schedules menyimpan jadwal di basis data lebih dahulu, sehingga perubahan
+tidak hilang hanya karena perangkat sedang mati. Pengguna lalu dapat mengirim
+seluruh jadwal aktif sebagai satu perintah \code{set_schedule}; perangkat menyimpan
+seluruh daftar, menggantikan daftar sebelumnya, dan menjawab dengan jumlah jadwal
+yang tersimpan (\figref{fig:web-seq-schedule-sync}).
+
+\figureasset[\linewidth]{web-seq-schedule-sync}{Urutan sinkronisasi jadwal: jadwal aktif dibaca
+dari basis data, dikirim sebagai satu perintah, lalu perangkat menjawab dengan
+jumlah jadwal yang tersimpan.}{fig:web-seq-schedule-sync}
+
+\subsection{Telemetri dan Peringatan}
+
+Telemetri adalah satu-satunya pesan yang datang tanpa diminta. Setiap pesan
+menghasilkan satu baris telemetri, pembaruan waktu terakhir terlihat, penutupan
+notifikasi offline, dan evaluasi ambang dengan aturan tunggal: persentase nol
+memicu notifikasi pakan habis, persentase di atas nol tetapi tidak lebih dari ambang
+memicu notifikasi pakan menipis, dan persentase di atas ambang menutup keduanya.
+Sebelum menulis notifikasi baru, aplikasi memeriksa apakah notifikasi sejenis masih
+terbuka, sehingga satu kondisi tidak menghasilkan ratusan baris
+(\figref{fig:web-seq-telemetry-alert}).
+
+\figureasset[\linewidth]{web-seq-telemetry-alert}{Urutan penanganan telemetri: perhitungan
+persentase, penyimpanan baris telemetri, lalu pembukaan atau penutupan notifikasi
+sesuai ambang.}{fig:web-seq-telemetry-alert}
+
+\subsection{Backup dan Restore Basis Data}
+
+Panel backup menyalin basis data yang sedang hidup ke berkas sementara lalu
+menyajikannya sebagai unduhan. Restore melakukan arah sebaliknya: berkas unggahan
+diperiksa apakah benar basis data sistem ini, lalu isinya disalin ke basis data
+aktif memakai antarmuka backup SQLite, bukan dengan menukar berkas. Cara itu dipilih
+karena koneksi UI dan worker sedang terbuka; menukar berkas di bawah koneksi yang
+hidup akan membuat keduanya membaca berkas yang salah. Setelah penyalinan, jurnal
+WAL dipadatkan agar berkas utama konsisten (\figref{fig:web-seq-backup-restore}).
+
+\figureasset[\linewidth]{web-seq-backup-restore}{Urutan backup dan restore: salinan konsisten
+diunduh sebagai berkas, dan berkas unggahan disalin kembali ke basis data aktif
+lewat antarmuka backup SQLite.}{fig:web-seq-backup-restore}
+
+\section{Pemilihan Mode Broker}
+
+\figref{fig:web-flow-broker-mode} memuat alur yang dijalankan saat proses
+dinyalakan, yang sudah dibahas dari sisi arsitektur pada \chapref{ch:02-arsitektur}.
+Dari sisi dashboard, hasil alur itu menentukan label pada sidebar: broker tertanam,
+broker yang sudah berjalan, atau broker eksternal. Label itu satu-satunya cara
+pengguna mengetahui mengapa perangkat tidak terlihat, misalnya ketika dashboard
+memakai broker eksternal sementara perangkat menyambung ke broker tertanam di mesin
+lain.
+
+\figureasset[\linewidth]{web-flow-broker-mode}{Alur pemilihan mode broker saat proses
+dinyalakan: pemeriksaan konfigurasi, pemeriksaan port, lalu penyalaan broker
+tertanam atau penggunaan broker yang sudah ada.}{fig:web-flow-broker-mode}
+
+\section{Sweeper: Dua Tugas Berkala}
+
+Sweeper bangun tiap \SweepS{} detik dan mengerjakan dua tugas yang tidak saling
+bergantung (\tabref{tab:05-sweeper}). Keduanya menyelesaikan keadaan yang tidak akan
+pernah diselesaikan oleh pesan masuk, yaitu pesan yang seharusnya datang tetapi
+tidak datang.
+
+\begin{table}[H]
+\centering
+\caption{Dua tugas berkala sweeper.}
+\label{tab:05-sweeper}
+\small
+\begin{tabular}{@{}p{3.2cm}p{4.4cm}p{7.4cm}@{}}
+\toprule
+\textbf{Tugas} & \textbf{Kriteria} & \textbf{Akibat} \\
+\midrule
+Penanda perintah kedaluwarsa & Perintah berstatus terkirim yang dibuat lebih dari
+\CmdTimeoutS{} detik lalu & Status perintah menjadi \code{timeout}; riwayat pakan
+terkait menjadi gagal dengan pesan \code{timeout}. \\
+Penanda perangkat offline & Perangkat yang masih ditandai online tetapi tidak
+mengirim data lebih dari \OfflineS{} detik & Status perangkat menjadi offline dan
+notifikasi offline dibuat bila belum ada. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Tugas kedua ada karena broker tertanam tidak menutup sesi client yang diam. Tanpa
+penanda itu, perangkat yang mati tanpa memutus soket akan tetap terlihat online
+selamanya. Ambang \OfflineS{} detik lebih longgar daripada interval telemetri
+\TelemetryMs{} ms, sehingga satu pesan yang terlewat tidak langsung membuat
+perangkat dinyatakan mati.
+
+\section{Internasionalisasi}
+
+Seluruh teks yang dilihat pengguna berada di satu modul terpisah dan tersedia dalam
+dua bahasa, Indonesia dan Inggris, dengan bahasa bawaan Indonesia. Pilihan bahasa
+disimpan di state sesi dan tidak memengaruhi nilai protokol: kode perangkat, topik,
+pengenal perintah, dan nilai enum sengaja tidak diterjemahkan karena merupakan
+bagian dari kontrak dengan perangkat, bukan teks tampilan.
