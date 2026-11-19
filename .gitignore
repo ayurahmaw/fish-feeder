@@ -86,5 +86,18 @@ __pycache__/
 *.db-wal
 *.db-shm
 
+# Design report build artefacts
+docs/design-report/assets/tikz/build/
+docs/design-report/assets/diagrams/png/
+docs/design-report/main-standalone.pdf
+docs/design-report/main-appendix.pdf
+docs/design-report/*.aux
+docs/design-report/*.log
+docs/design-report/*.out
+docs/design-report/*.toc
+docs/design-report/*.fls
+docs/design-report/*.fdb_latexmk
+docs/design-report/*.synctex.gz
+
 Streamlit*/
 UTS*
