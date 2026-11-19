@@ -94,10 +94,10 @@ for ref in $(grep -rhoE '\\mmdfig\{[^}]+\}' chapters 2>/dev/null | sed -E 's/.*\
   fi
 done
 for ref in $(grep -rhoE '\\tikzfig\{[^}]+\}' chapters 2>/dev/null | sed -E 's/.*\{(.*)\}/\1/' | sort -u); do
-  if [ -f "assets/tikz/build/$ref.pdf" ]; then
+  if [ -f "assets/tikz/pdf/$ref.pdf" ]; then
     ok "tikz $ref"
   else
-    err "assets/tikz/build/$ref.pdf belum ada"
+    err "assets/tikz/pdf/$ref.pdf belum ada"
   fi
 done
 

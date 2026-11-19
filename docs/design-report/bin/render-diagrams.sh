@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 MERMAID_CFG="assets/diagrams/mermaid-config.json"
 PUPPETEER_CFG="assets/diagrams/puppeteer-config.json"
 
-mkdir -p assets/diagrams/svg assets/diagrams/pdf assets/diagrams/png assets/tikz/build
+mkdir -p assets/diagrams/svg assets/diagrams/pdf assets/diagrams/png assets/tikz/build assets/tikz/pdf assets/tikz/png
 
 command -v mmdc >/dev/null 2>&1 || { echo "mmdc tidak ada — jalankan bin/bootstrap-tools.sh" >&2; exit 1; }
 command -v pdflatex >/dev/null 2>&1 || { echo "pdflatex tidak ada — jalankan bin/bootstrap-tools.sh" >&2; exit 1; }
@@ -31,6 +31,13 @@ render_mermaid() {
   local png="assets/diagrams/png/$base.png"
 
   printf '  mermaid  %-34s' "$base"
+
+  # mmdc output is not byte-stable, so skip when the source has not changed.
+  if [ -f "$svg" ] && [ -f "$pdf" ] && [ "$svg" -nt "$src" ] && [ "$pdf" -nt "$src" ] \
+     && [ "$svg" -nt "$MERMAID_CFG" ]; then
+    printf 'skip (unchanged)\n'
+    return 0
+  fi
 
   if ! mmdc_ -i "$src" -o "$svg" 2>/tmp/mmdc.err; then
     printf 'GAGAL(svg)\n'
@@ -55,15 +62,24 @@ render_tikz() {
   local src="$1"
   local base
   base="$(basename "$src" .tex)"
-  local out="assets/tikz/build/$base.pdf"
+  local built="assets/tikz/build/$base.pdf"
+  local out="assets/tikz/pdf/$base.pdf"
 
   printf '  tikz     %-34s' "$base"
-  rm -f "$out"
+  rm -f "$built" "$out"
   if ! latexmk -pdf -interaction=nonstopmode -halt-on-error \
         -outdir=assets/tikz/build "$src" >"/tmp/tikz-$base.log" 2>&1; then
     printf 'GAGAL\n'
     grep -nE '^!|^l\.[0-9]+' "/tmp/tikz-$base.log" | head -12 | sed 's/^/           /'
     return 1
+  fi
+  # build/ holds the latexmk intermediates (gitignored); pdf/ holds the asset
+  # that LaTeX includes and that can be copied into Word/Slides.
+  cp "$built" "$out"
+  # PNG preview so the figure is visible when browsing the repo.
+  qlmanage -t -s 1600 -o assets/tikz/png "$out" >/dev/null 2>&1 || true
+  if [ -f "assets/tikz/png/$base.pdf.png" ]; then
+    mv "assets/tikz/png/$base.pdf.png" "assets/tikz/png/$base.png"
   fi
   printf 'ok  %8s\n' "$(wc -c <"$out" | tr -d ' ')B"
 }

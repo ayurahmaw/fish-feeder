@@ -33,8 +33,9 @@
 % --- Gambar ---------------------------------------------------------------
 % Hasil render Mermaid (SVG -> PDF) ada di assets/diagrams/pdf/
 \newcommand{\mmdfig}[1]{assets/diagrams/pdf/#1}
-% Hasil compile TikZ standalone ada di assets/tikz/build/
-\newcommand{\tikzfig}[1]{assets/tikz/build/#1}
+% Hasil compile TikZ standalone ada di assets/tikz/pdf/ (aset yang di-commit);
+% intermediates latexmk ada di assets/tikz/build/ (gitignored).
+\newcommand{\tikzfig}[1]{assets/tikz/pdf/#1}
 
 % Gambar standar: \figureasset[lebar]{berkas}{caption}{label}
 % Tinggi dibatasi 0.88\textheight agar diagram yang tinggi tidak meluber ke halaman

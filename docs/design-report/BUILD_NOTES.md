@@ -68,11 +68,13 @@ assets/diagrams/src/*.mmd   sumber Mermaid        (di-commit)
 assets/diagrams/svg/*.svg   hasil render          (di-commit, copy-paste-able)
 assets/diagrams/pdf/*.pdf   hasil render          (di-commit, dipakai LaTeX)
 assets/tikz/*.tex           sumber TikZ           (di-commit)
-assets/tikz/build/*.pdf     hasil compile         (gitignored, dibuat oleh build)
+assets/tikz/pdf/*.pdf       hasil compile         (di-commit, copy-paste-able + dipakai LaTeX)
+assets/tikz/build/*.pdf     intermediates latexmk (gitignored, dibuat oleh build)
 ```
 
-Kalau ingin mengubah gambar: sunting berkas sumber lalu `make diagrams`.
-Jangan mengedit SVG/PDF hasil render — akan tertimpa.
+Kedua jenis aset punya bentuk yang sama: sumber editable di satu tempat, hasil render
+yang bisa langsung dipakai di tempat lain. Jangan mengedit SVG/PDF hasil render — akan
+tertimpa saat `make diagrams`.
 
 ## Fallback bila render gagal
 

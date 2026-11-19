@@ -1,0 +1,91 @@
+% Firmware flow, whole program: setup() once, then the loop() super-loop.
+% Order and periods from firmware/esp32_feeder/esp32_feeder.ino and config.h.
+\documentclass[border=8pt]{standalone}
+\usepackage{xcolor}
+\input{preamble/colors}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.misc}
+\begin{document}
+\sffamily\small
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  >={Stealth[length=2.6mm,width=1.8mm]},
+  box/.style={
+    draw=accent, line width=0.7pt, rounded corners=3pt,
+    inner sep=5pt, align=left
+  },
+  setup/.style={box, fill=white},
+  loop/.style={box, fill=accentLight},
+  flow/.style={->, draw=ink, line width=0.8pt},
+  back/.style={->, draw=accent, line width=0.9pt, dashed},
+  head/.style={font=\sffamily\bfseries\footnotesize, text=navy},
+  note/.style={font=\sffamily\scriptsize, text=muted, align=left, text width=8.0cm}
+]
+
+% ---------------------------------------------------------------- setup panel
+\node[head, anchor=south west] at (0.05, 0.10) {setup() --- once per boot};
+\node[setup, text width=6.15cm] (s1) at (3.30, -0.60) {%
+  \textbf{\textcolor{accent}{1}}\enspace serial 115200, 300 ms pause};
+\node[setup, text width=6.15cm] (s2) at (3.30, -2.00) {%
+  \textbf{\textcolor{accent}{2}}\enspace hw::begin\\
+  {\scriptsize I2C scan, servo closed, DS3231 and LCD probe}};
+\node[setup, text width=6.15cm] (s3) at (3.30, -3.55) {%
+  \textbf{\textcolor{accent}{3}}\enspace proto::begin\\
+  {\scriptsize NVS: threshold, fireDate, fireMask, schedules}};
+\node[setup, text width=6.15cm] (s4) at (3.30, -5.10) {%
+  \textbf{\textcolor{accent}{4}}\enspace net::begin\\
+  {\scriptsize WiFi STA, id from MAC, buffer 1024 B, keepalive 60 s}};
+\node[setup, text width=6.15cm] (s5) at (3.30, -6.65) {%
+  \textbf{\textcolor{accent}{5}}\enspace LCD splash 3000 ms\\
+  \textbf{\textcolor{accent}{6}}\enspace first distance measurement};
+
+\draw[flow] (s1) -- (s2);
+\draw[flow] (s2) -- (s3);
+\draw[flow] (s3) -- (s4);
+\draw[flow] (s4) -- (s5);
+
+% ---------------------------------------------------------------- loop panel
+\node[head, anchor=south west] at (8.15, 0.10) {loop() --- one iteration, one thread};
+\node[loop, text width=7.55cm] (l1) at (12.10, -1.20) {%
+  \textbf{\textcolor{accent}{1}}\enspace\textbf{\texttt{net::tick()}}\\[1pt]
+  {\scriptsize keepalive and retry every 5000 ms; MQTT rising edge $\rightarrow$
+   publish telemetry, WiFi rising edge $\rightarrow$ \texttt{ntpStart()}}};
+\node[loop, text width=7.55cm] (l2) at (12.10, -2.95) {%
+  \textbf{\textcolor{accent}{2}}\enspace\textbf{\texttt{commandTick()}}\qquad
+  \textbf{\textcolor{accent}{3}}\enspace\textbf{\texttt{ntpTick()}}\\[1pt]
+  {\scriptsize one command from the queue of 4; wait for the SNTP reply}};
+\node[loop, text width=7.55cm] (l3) at (12.10, -4.55) {%
+  \textbf{\textcolor{accent}{4}}\enspace\textbf{\texttt{feedTick()}}\qquad
+  \textbf{\textcolor{accent}{5}}\enspace\textbf{\texttt{sensorTick()}}\\[1pt]
+  {\scriptsize one gate phase per pass; measure distance every 2000 ms}};
+\node[loop, text width=7.55cm] (l4) at (12.10, -6.15) {%
+  \textbf{\textcolor{accent}{6}}\enspace\textbf{\texttt{scheduleTick()}}\qquad
+  \textbf{\textcolor{accent}{7}}\enspace\textbf{\texttt{telemetryTick()}}\\[1pt]
+  {\scriptsize local schedules every 1000 ms, at most one per pass;
+   publish telemetry every 15000 ms}};
+\node[loop, text width=7.55cm] (l5) at (12.10, -7.60) {%
+  \textbf{\textcolor{accent}{8}}\enspace\textbf{\texttt{displayTick()}}\\[1pt]
+  {\scriptsize refresh the 16x2 LCD every 500 ms}};
+
+\draw[flow] (l1) -- (l2);
+\draw[flow] (l2) -- (l3);
+\draw[flow] (l3) -- (l4);
+\draw[flow] (l4) -- (l5);
+
+% setup -> loop
+\draw[flow] (s5.east) -- ++(0.55,0) |- (l1.west);
+\node[note, anchor=north west, text width=1.1cm, align=center] at (7.05,-5.35) {enter};
+
+% loop back edge, on the right
+\draw[back] (l5.east) -- ++(0.55,0) |- (l1.east);
+\node[font=\sffamily\scriptsize, text=muted, rotate=90, anchor=south]
+  at ($(l3.east)+(0.55,0)$) {next iteration};
+
+% footnote
+\node[note, anchor=north west] at (8.15, -8.75) {%
+  every step runs to completion before the next; each function checks
+  \texttt{millis()} and returns at once when its period is not due, so there is no
+  \texttt{delay()} and no task of its own};
+
+\end{tikzpicture}
+\end{document}

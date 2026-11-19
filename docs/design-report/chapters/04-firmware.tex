@@ -23,17 +23,19 @@ broker, buffer \MqttBuffer{} byte, keepalive \KeepAliveS{} detik, socket timeout
 sepuluh detik, dan callback pesan; splash ditampilkan pada LCD; lalu jarak diukur
 sekali agar telemetri pertama tidak kosong.
 
-\figref{fig:fw-loop-order} memperlihatkan bentuk \code{loop()}. Kotak bernomor
-adalah urutan pemanggilan pada satu iterasi: panah selalu bergerak dari langkah yang
-lebih kecil ke langkah yang lebih besar, lalu kembali ke langkah 1, sehingga tidak ada
-dua langkah yang berjalan bersamaan. Dua deteksi tepi naik ditangani di dalam langkah
-1: saat koneksi MQTT baru terbentuk, telemetri langsung dikirim sebagai penanda
-perangkat hidup; saat WiFi baru tersambung, permintaan sinkronisasi waktu dimulai.
+\figref{fig:fw-flow-overview} memperlihatkan alur lengkap program: panel kiri adalah
+\code{setup()} yang berjalan sekali saat boot, panel kanan adalah \code{loop()}. Kotak
+bernomor pada panel kanan adalah urutan pemanggilan pada satu iterasi: panah selalu
+bergerak dari langkah yang lebih kecil ke langkah yang lebih besar, lalu kembali ke
+langkah 1, sehingga tidak ada dua langkah yang berjalan bersamaan. Dua deteksi tepi
+naik ditangani di dalam langkah 1: saat koneksi MQTT baru terbentuk, telemetri langsung
+dikirim sebagai penanda perangkat hidup; saat WiFi baru tersambung, permintaan
+sinkronisasi waktu dimulai.
 
-\figuretikz[\linewidth]{fw-loop-order}{Alur \code{loop()} pada satu thread: delapan
-pemanggilan berurutan pada setiap iterasi, lalu panah kembali ke langkah 1. Kotak
-bernomor dapat memuat lebih dari satu pemanggilan berurutan; rincian tiap fungsi ada
-di \tabref{tab:04-tick}.}{fig:fw-loop-order}
+\figuretikz[\linewidth]{fw-flow-overview}{Alur lengkap firmware: \code{setup()} sekali
+saat boot, lalu \code{loop()} satu thread dengan delapan pemanggilan berurutan pada
+setiap iterasi. Kotak bernomor dapat memuat lebih dari satu pemanggilan berurutan;
+rincian tiap fungsi ada di \tabref{tab:04-tick}.}{fig:fw-flow-overview}
 
 \tabref{tab:04-tick} merinci setiap tick dan periodenya. Periode ``setiap iterasi''
 berarti fungsi dipanggil pada setiap putaran \code{loop()} dan keluar sendiri bila
