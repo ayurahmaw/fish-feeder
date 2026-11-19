@@ -1,0 +1,39 @@
+%% title: Database backup and restore from the sidebar
+%% source: dashboard/app.py:104-138 backup expander, download and upload
+%% source: dashboard/db.py:71-96 backup_to and restore_from
+
+sequenceDiagram
+  participant OP as Operator
+  participant SB as Sidebar
+  participant BK as db.backup_to
+  participant RS as db.restore_from
+  participant SQ as SQLite
+
+  Note over SB: expander data backup and restore
+  OP->>SB: open expander and press download
+  SB->>BK: backup_to temp path feeder.db
+  BK->>SQ: connect the destination file
+  BK->>SQ: connection backup into destination, online backup API
+  SQ-->>BK: consistent snapshot, live writers not blocked
+  BK-->>SB: snapshot written to the temp path
+  SB->>SB: read bytes, temp directory closed
+  SB-->>OP: st.download_button feeder.db, mime sqlite3
+
+  OP->>SB: upload a .db file and press apply
+  SB->>SB: write upload to a temp file with suffix .db
+  SB->>RS: restore_from temp path
+  RS->>SQ: open the source file
+  RS->>SQ: query sqlite_master for a devices table
+  alt devices table missing
+    SQ-->>RS: no row returned
+    RS-->>SB: raise ValueError, not a feeder database
+    SB-->>OP: st.error restore failed
+  else devices table found
+    SQ-->>RS: row present
+    RS->>SQ: src.backup into connection, UI and worker connections stay open
+    RS->>SQ: PRAGMA wal_checkpoint TRUNCATE
+    SQ-->>RS: WAL folded into the main file
+    RS-->>SB: restore finished
+    SB->>SB: data.clear_reads then rerun
+    SB-->>OP: toast restore ok, temp file unlinked
+  end

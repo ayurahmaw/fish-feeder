@@ -1,0 +1,40 @@
+%% title: Platform bootstrap sequence
+%% source: dashboard/run.py:23-37 start platform then hand off to Streamlit
+%% source: dashboard/runtime.py:40-97 init_db, broker mode, worker, sweeper
+
+sequenceDiagram
+  participant RUN as run.py
+  participant RT as runtime
+  participant BR as broker
+  participant WK as worker
+  participant SW as sweeper
+  participant ST as Streamlit
+
+  RUN->>RT: get_runtime
+  RT->>RT: db.init_db, create schema when absent
+  RT->>RT: migrate hopper calibration to 3.0 and 17.0 cm
+  RT->>RT: read MQTT_URL, derive host and port
+  alt EMBED_BROKER is false
+    RT->>RT: mode external, use the broker at MQTT_URL
+  else port 1883 already in use
+    RT->>BR: probe connect_ex on host and port
+    BR-->>RT: port answers
+    RT->>RT: mode existing, reuse the broker already running
+  else port free
+    RT->>BR: EmbeddedBroker start on 0.0.0.0:1883
+    BR-->>RT: broker ready on its asyncio daemon thread
+  end
+  Note over RT,BR: if the embedded broker fails, log the error and fall back to external
+  RT->>WK: Worker start, connect_async with keepalive 60
+  WK->>BR: CONNECT client id feeder-dashboard
+  BR-->>WK: CONNACK
+  WK->>BR: subscribe telemetry ack status state at QoS 0
+  WK-->>RT: wait_connected returns within 5 s
+  RT->>SW: start thread timeout-sweeper
+  loop every 10 s
+    SW->>SW: sweep_timeouts 30, then mark_stale_devices_offline 45
+  end
+  RT-->>RUN: runtime ready, broker label and DB path logged
+  RUN->>ST: streamlit cli main on app.py, port 8501
+  ST->>RT: get_runtime returns the same singleton
+  ST-->>ST: serve the 6 pages to the operator

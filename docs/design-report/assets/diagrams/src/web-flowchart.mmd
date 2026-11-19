@@ -1,0 +1,52 @@
+%% title: Streamlit session and page flow
+%% source: dashboard/app.py:37-166 guard, sidebar, topbar, routing
+%% source: dashboard/data.py:26-64 cache TTL 2 s, actions.py:15-24 client_command
+
+flowchart TD
+  G["Entry: get_runtime, then data.devices()"]
+  STOP["st.error no device, st.stop"]
+  SB["Sidebar shell"]
+  DEV["Device selectbox<br/>device_code"]
+  HEALTH["System health<br/>broker mode, worker, DB, 30 s ack"]
+  LANG["ID / EN language toggle"]
+  BAK["Data backup and restore<br/>download .db, upload .db"]
+  TOP["Topbar<br/>page title, online badge, refresh"]
+  P1["Status page"]
+  P2["Live page"]
+  P3["Alerts page"]
+  P4["History page"]
+  P5["Schedules page"]
+  P6["Control page"]
+  A1["Actions: unread filter, mark read"]
+  A2["Actions: add, edit, delete, toggle, send to device"]
+  A3["Actions: manual feed, servo test, threshold, RTC, get_state"]
+  RD["Read path<br/>data.py st.cache_data TTL 2 s"]
+  WR["Write path<br/>actions.client_command"]
+  DB[("SQLite feeder.db")]
+  MQ["MQTT publish command QoS 1"]
+
+  G -->|"list empty"| STOP
+  G -->|"rows found"| SB
+  SB --> DEV
+  SB --> HEALTH
+  SB --> LANG
+  SB --> BAK
+  SB --> TOP
+  TOP --> P1
+  TOP --> P2
+  TOP --> P3
+  TOP --> P4
+  TOP --> P5
+  TOP --> P6
+  P1 --> RD
+  P2 --> RD
+  P3 --> A1
+  A1 --> RD
+  P4 --> RD
+  P5 --> A2
+  P6 --> A3
+  A2 --> WR
+  A3 --> WR
+  RD -->|"SELECT"| DB
+  WR -->|"BEGIN IMMEDIATE then INSERT"| DB
+  WR -->|"after commit"| MQ

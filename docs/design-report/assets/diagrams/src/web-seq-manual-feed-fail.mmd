@@ -1,0 +1,42 @@
+%% title: Manual feed failure paths
+%% source: dashboard/handlers.py:118-147 ack error and feed_failed alert
+%% source: dashboard/db.py:443-461 sweep_timeouts, handlers.py:187-215 status offline
+
+sequenceDiagram
+  participant OP as Operator
+  participant CP as Control page
+  participant SC as commands.send_command
+  participant DB as DB SQLite
+  participant B as Broker
+  participant ESP as ESP32
+
+  OP->>CP: confirm manual_feed portions 2
+  CP->>SC: client_command manual_feed
+  SC->>DB: BEGIN IMMEDIATE, commands sent plus feeding_logs pending
+  SC->>B: publish command QoS 1
+
+  alt ack carries an error result
+    B-->>ESP: command manual_feed
+    ESP->>ESP: guard rejects, busy or servo not attached
+    ESP->>B: publish ack result error_busy
+    B-->>DB: worker handle_ack, apply_ack with ok false
+    DB->>DB: commands status failed, result_message stored
+    DB->>DB: feeding_logs status failed
+    DB->>DB: insert notifications feed_failed critical
+    DB-->>CP: next read shows failed
+    CP-->>OP: alert listed on the Alerts page
+  else no ack within 30 s
+    Note over DB: sweeper thread runs every 10 s
+    DB->>DB: sweep_timeouts 30, commands status timeout
+    DB->>DB: feeding_logs status failed, message timeout
+    DB-->>CP: command row turns timeout
+    CP-->>OP: page shows timeout, no alert raised
+  else device dies before ack
+    Note over ESP,B: no clean DISCONNECT, keepalive 60 s expires
+    ESP--xB: socket lost or power cut
+    B-->>DB: publishes will payload status offline
+    DB->>DB: devices.is_online = 0, last_seen_at kept
+    DB->>DB: insert notifications device_offline warning
+    DB-->>CP: device badge turns offline
+    CP-->>OP: status page shows device offline
+  end

@@ -1,0 +1,43 @@
+%% title: Manual feed success - web to device with ack
+%% source: dashboard/commands.py:34-73 send_command, BEGIN IMMEDIATE and publish
+%% source: dashboard/handlers.py:118-147 handle_ack, db.py:414-440 apply_ack
+
+sequenceDiagram
+  participant OP as Operator
+  participant CP as Control page
+  participant SC as commands.send_command
+  participant DB as DB SQLite
+  participant B as Broker
+  participant ESP as ESP32
+
+  OP->>CP: enter portions 2 and press feed
+  CP->>CP: confirm dialog, shows ack timeout 30 s
+  OP->>CP: confirm
+  CP->>SC: client_command manual_feed with portions 2
+  SC->>DB: ensure_device feeder-64008c
+  SC->>DB: BEGIN IMMEDIATE
+  SC->>DB: INSERT commands, status sent
+  SC->>DB: INSERT feeding_logs, status pending, level before
+  SC->>DB: COMMIT
+  SC->>B: publish command QoS 1, command_id cmd-...
+  SC-->>CP: command_id and feed_log_id
+  CP-->>OP: toast command sent
+  B-->>ESP: command manual_feed portions 2
+  ESP->>ESP: guards pass, phase idle, servo ready, level above 0
+  ESP->>ESP: feedStart portions 2
+  loop once per portion
+    ESP->>ESP: servo open, open phase 1000 ms
+    ESP->>ESP: servo close, settle 300 ms, jobRemaining decrement
+    ESP->>ESP: gap 200 ms before the next portion
+  end
+  ESP->>ESP: finishFeed, measure distance
+  ESP->>B: publish telemetry with post-feed level
+  ESP->>B: publish ack result ok, message feeding 2 portions
+  B-->>DB: worker handle_ack then apply_ack
+  DB->>DB: commands status success, acked_at set
+  DB->>DB: feeding_logs status success
+  DB->>DB: attach_feed_level_after from latest telemetry
+  CP->>DB: data.status_of and recent_commands, cache TTL 2 s
+  DB-->>CP: status success
+  CP-->>OP: history row shows success
+  Note over SC,DB: rows are written before publish, so any late ack still correlates

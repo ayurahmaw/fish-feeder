@@ -1,0 +1,37 @@
+%% title: Firmware scheduled feed execution
+%% source: firmware/esp32_feeder/esp32_feeder.ino:314-360 scheduleTick guard chain
+%% source: firmware/esp32_feeder/config.h:101-102 max 8 schedules, 60 s window
+
+sequenceDiagram
+  participant SC as ESP32 scheduleTick
+  participant NVS as NVS
+  participant SV as servo gate
+  participant B as Broker
+  participant PL as Platform
+
+  loop every 1000 ms
+    SC->>SC: tick at 1 Hz, then clock valid?
+    alt clock invalid
+      SC->>SC: return and wait for NTP or DS3231
+    else clock valid
+      SC->>NVS: load schedule list, up to 8 entries
+      NVS-->>SC: feed_time and portions per entry
+      SC->>SC: match HH:MM:SS, seconds inside the 60 s window
+      SC->>NVS: wasFired dateKey and index
+      NVS-->>SC: fired or not yet fired today
+      SC->>SC: guard chain, wasFired, phase idle, servo ready, level above 0
+      alt a guard fails
+        SC->>NVS: markFired dateKey and index when the entry is skipped
+        SC->>SC: try the next entry
+      else all guards pass
+        SC->>SV: feedStart portions, gate open 1000 ms
+        SV-->>SC: close, settle 300 ms, gap 200 ms per portion
+        SC->>NVS: markFired dateKey and index
+        SC->>B: publish state event scheduled_feed with portions and feed_time
+        B-->>PL: state feeder-64008c
+        PL->>PL: insert feeding_logs scheduled success, level before and after
+        SC->>B: publish telemetry with the post-feed distance
+        B-->>PL: telemetry, latest row holds the new level
+      end
+    end
+  end

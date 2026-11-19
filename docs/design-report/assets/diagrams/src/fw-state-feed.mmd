@@ -1,0 +1,32 @@
+%% title: Feed gate state machine
+%% source: firmware/esp32_feeder/esp32_feeder.ino:14-194 FeedPhase, feedStart, finishFeed, feedTick
+%% source: firmware/esp32_feeder/config.h:69-71 open 1000 ms, settle 300 ms, gap 200 ms
+
+stateDiagram-v2
+  [*] --> IDLE
+  IDLE --> OPEN : feedStart accepted, phase IDLE and servo ready
+  OPEN --> CLOSING : PORTION_OPEN_MS elapsed, 1000 ms
+  CLOSING --> GAP : settle 300 ms elapsed and jobRemaining above 0
+  CLOSING --> IDLE : settle 300 ms elapsed and jobRemaining is 0, finishFeed
+  GAP --> OPEN : PORTION_GAP_MS elapsed, 200 ms
+
+  IDLE : FEED_IDLE, servo closed, no job
+  OPEN : FEED_OPEN, gate at 90 deg
+  CLOSING : FEED_CLOSING, gate at 0 deg
+  GAP : FEED_GAP, between portions
+
+  note right of IDLE
+    feedStart refuses when phase is not IDLE or the servo is not ready
+    manual_feed also refuses when feed level is 0
+  end note
+
+  note right of CLOSING
+    jobRemaining is decremented exactly once per portion
+    at the end of the 300 ms settle phase
+  end note
+
+  note left of IDLE
+    finishFeed closes the servo and measures distance
+    scheduled job publishes state scheduled_feed then telemetry
+    manual job publishes telemetry then ack ok
+  end note

@@ -1,0 +1,35 @@
+%% title: Command lifecycle state machine
+%% source: dashboard/commands.py:34-73 insert status sent then publish
+%% source: dashboard/db.py:414-461 apply_ack and sweep_timeouts
+
+stateDiagram-v2
+  [*] --> sent : INSERT commands and publish command QoS 1
+  sent --> success : ack with result ok
+  sent --> failed : ack with an error result
+  sent --> timeout : sweeper every 10 s finds it older than 30 s
+  success --> [*]
+  failed --> [*]
+  timeout --> [*]
+
+  note right of sent
+    tables commands and feeding_logs
+    feeding_logs starts as pending for manual_feed
+    pending exists in the CHECK but insert_command writes sent
+  end note
+
+  note right of success
+    db.apply_ack sets commands status success and acked_at
+    attach_feed_level_after fills the after level from latest telemetry
+  end note
+
+  note right of failed
+    ack results error_bad_payload, error_busy, error_servo,
+    error_low_level or error_unknown_type
+    notifications row feed_failed with severity critical
+  end note
+
+  note right of timeout
+    commands status timeout, result_message untouched
+    feeding_logs status failed with message timeout
+    no notification is raised on timeout
+  end note

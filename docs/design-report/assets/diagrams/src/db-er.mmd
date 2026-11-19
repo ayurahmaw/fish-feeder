@@ -1,0 +1,107 @@
+%% title: Database entity-relationship diagram
+%% source: database/schema.sql:20-184 six tables, one view, cascade rules
+%% source: dashboard/db.py:369-461 commands, feeding_logs, sweep_timeouts
+
+erDiagram
+  devices {
+    INTEGER id PK "autoincrement"
+    TEXT device_code UK "MQTT topic segment"
+    TEXT name
+    TEXT location
+    TEXT timezone "IANA, default Asia/Jakarta"
+    REAL sensor_full_cm "3.0 hopper full"
+    REAL sensor_empty_cm "17.0 hopper empty"
+    INTEGER low_feed_threshold_pct "0..100, default 20"
+    INTEGER is_online "0 or 1"
+    TEXT last_seen_at
+    TEXT created_at
+    TEXT updated_at
+  }
+
+  telemetry {
+    INTEGER id PK
+    INTEGER device_id FK
+    REAL distance_cm "raw ultrasonic"
+    REAL feed_level_pct "computed percent"
+    TEXT state "idle feeding error"
+    TEXT recorded_at
+  }
+
+  schedules {
+    INTEGER id PK
+    INTEGER device_id FK
+    TEXT name
+    TEXT feed_time "HH:MM:SS"
+    INTEGER portions
+    INTEGER is_active "0 or 1"
+    TEXT created_at
+    TEXT updated_at
+  }
+
+  commands {
+    INTEGER id PK
+    TEXT command_id UK "correlates with ack"
+    INTEGER device_id FK
+    TEXT type "six command types"
+    TEXT payload "json_valid"
+    TEXT status "pending sent success failed timeout"
+    TEXT result_message
+    TEXT created_at
+    TEXT acked_at
+  }
+
+  feeding_logs {
+    INTEGER id PK
+    INTEGER device_id FK
+    TEXT command_id "logical link, no FK"
+    TEXT trigger_type "manual or scheduled"
+    INTEGER schedule_id FK "always NULL at runtime"
+    INTEGER portions
+    TEXT status "pending success failed"
+    TEXT message
+    REAL distance_before_cm
+    REAL distance_after_cm
+    REAL feed_level_before_pct
+    REAL feed_level_after_pct
+    TEXT requested_at
+    TEXT completed_at
+  }
+
+  notifications {
+    INTEGER id PK
+    INTEGER device_id FK
+    TEXT type "feed_low feed_empty feed_failed device_offline"
+    TEXT severity "info warning critical"
+    TEXT title
+    TEXT message
+    REAL feed_level_pct
+    INTEGER is_read "0 or 1"
+    TEXT created_at
+  }
+
+  v_device_status {
+    INTEGER device_id
+    TEXT device_code
+    TEXT name
+    TEXT location
+    REAL sensor_full_cm
+    REAL sensor_empty_cm
+    INTEGER low_feed_threshold_pct
+    INTEGER is_online
+    TEXT last_seen_at
+    REAL distance_cm
+    REAL feed_level_pct
+    TEXT state
+    TEXT measured_at
+    INTEGER is_empty
+    INTEGER is_low
+  }
+
+  devices ||--o{ telemetry : "owns, ON DELETE CASCADE"
+  devices ||--o{ schedules : "owns, ON DELETE CASCADE"
+  devices ||--o{ commands : "owns, ON DELETE CASCADE"
+  devices ||--o{ feeding_logs : "owns, ON DELETE CASCADE"
+  devices ||--o{ notifications : "owns, ON DELETE CASCADE"
+  schedules |o--o{ feeding_logs : "schedule_id, ON DELETE SET NULL"
+  commands ||..o| feeding_logs : "logical link on command_id, no FK"
+  devices ||--|| v_device_status : "view: latest telemetry"

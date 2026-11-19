@@ -1,0 +1,38 @@
+%% title: End-to-end deployment topology
+%% source: dashboard/runtime.py:68-97 broker mode, worker, sweeper
+%% source: firmware/esp32_feeder/config.h:51 TOPIC_PREFIX feeder-ayurahmaw
+
+flowchart LR
+  subgraph DEVICE["DEVICE"]
+    ESP["ESP32<br/>firmware 1.0.0, WiFi STA"]
+    SIM["sim.js<br/>Node v22"]
+    NR["Node-RED<br/>legacy"]
+  end
+
+  subgraph PLATFORM["PLATFORM - one Python process, run.py"]
+    BRK["MQTT broker<br/>:1883"]
+    WK["Worker<br/>paho"]
+    HDL["Handlers"]
+    SWP["Sweeper<br/>10 s"]
+    DB[("SQLite<br/>feeder.db WAL")]
+    ST["Streamlit<br/>:8501, 6 pages"]
+  end
+
+  subgraph CLIENT["CLIENT"]
+    OPR["Operator<br/>browser"]
+    CLI["cli.py<br/>command publisher"]
+  end
+
+  ESP -->|"telemetry ack status state"| BRK
+  BRK -->|"command QoS 1"| ESP
+  SIM -->|"telemetry status"| BRK
+  NR -->|"telemetry"| BRK
+  CLI -->|"command QoS 1"| BRK
+  BRK -->|"subscribe feeder-ayurahmaw/+/telemetry ack status state"| WK
+  WK -->|"handle_*"| HDL
+  HDL -->|"INSERT, UPDATE"| DB
+  SWP -->|"timeouts, offline"| DB
+  ST -->|"reads, TTL 2 s"| DB
+  ST -->|"publish command"| BRK
+  OPR -->|"browser"| ST
+  BRK -.->|"LWT offline"| WK

@@ -1,0 +1,47 @@
+%% title: Schedule CRUD and device sync
+%% source: dashboard/app_pages/schedules.py:96-142 sync badge and send to device
+%% source: firmware/esp32_feeder/protocol.cpp set_schedule stores up to 8 entries in NVS
+
+sequenceDiagram
+  participant OP as Operator
+  participant SP as Schedules page
+  participant DB as DB
+  participant SC as commands
+  participant B as Broker
+  participant ESP as ESP32
+
+  OP->>SP: add schedule 07:00 with 2 portions
+  SP->>DB: insert_schedule
+  OP->>SP: edit name, time or portions
+  SP->>DB: update schedule row
+  OP->>SP: delete schedule
+  SP->>DB: delete schedule row
+  OP->>SP: toggle is_active
+  SP->>DB: set_schedule_active
+  SP->>SP: session flag schedule_dirty true
+  Note over SP: badge states offline, changes_pending, synced
+
+  OP->>SP: press send to device
+  alt device offline or no active schedule
+    SP-->>OP: button disabled, badge stays offline
+  else online with active schedules
+    SP->>DB: active_schedules, is_active = 1 ordered by feed_time
+    DB-->>SP: list of feed_time and portions
+    SP->>SC: client_command set_schedule with that list
+    SC->>DB: BEGIN IMMEDIATE, INSERT commands status sent
+    SC->>B: publish command set_schedule QoS 1
+    B-->>ESP: command set_schedule
+    ESP->>ESP: parse JSON, cap at 8 entries, store in NVS namespace feeder
+    alt parse ok
+      ESP->>B: publish ack ok, message schedules stored: N
+      B-->>DB: handle_ack, apply_ack success
+      DB-->>SP: next read shows success
+      SP->>SP: clear dirty flag, badge synced
+      SP-->>OP: toast schedule sent
+    else parse failed
+      ESP->>B: publish ack error_bad_payload
+      B-->>DB: apply_ack failed
+      DB-->>SP: command failed
+      SP-->>OP: badge back to changes_pending
+    end
+  end

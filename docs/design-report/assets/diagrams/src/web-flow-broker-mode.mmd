@@ -1,0 +1,17 @@
+%% title: Runtime broker selection
+%% source: dashboard/runtime.py:68-97 broker mode decision
+%% source: dashboard/broker.py:17-71 port_in_use and EmbeddedBroker
+
+flowchart LR
+  A["runtime build"] --> B{"EMBED_BROKER false?"}
+  B -->|"yes"| EXT["mode external<br/>log: using MQTT_URL"]
+  B -->|"no"| C{"port 1883 in use?"}
+  C -->|"yes"| EXI["mode existing<br/>log: reusing running broker"]
+  C -->|"no"| D["start embedded amqtt<br/>bind 0.0.0.0:1883"]
+  D --> E{"start ok?"}
+  E -->|"yes"| EMB["mode embedded<br/>log: broker running"]
+  E -->|"no"| FB["log broker error<br/>fall back to external"]
+  EXT --> W["worker start, sweeper thread,<br/>then Streamlit on port 8501"]
+  EXI --> W
+  EMB --> W
+  FB --> W

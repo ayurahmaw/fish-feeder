@@ -1,0 +1,38 @@
+%% title: Firmware MQTT session lifecycle
+%% source: firmware/esp32_feeder/net.cpp:81-106 retry, will, birth, subscribe
+%% source: firmware/esp32_feeder/net.cpp:135-136 buffer 1024 and keepalive 60
+
+sequenceDiagram
+  participant ESP as ESP32
+  participant B as Broker
+  participant PL as Platform
+
+  ESP->>B: CONNECT clientId feeder-64008c, keepalive 60 s, socket timeout 10 s
+  Note over ESP,B: will topic feeder-ayurahmaw/feeder-64008c/status, payload offline, QoS 0, retain true
+  B-->>ESP: CONNACK accepted
+  ESP->>B: publish status online, retain true, QoS 0
+  B-->>PL: status online, worker sets is_online 1
+  PL->>PL: resolve device_offline notification
+  ESP->>B: subscribe command topic at QoS 1
+  B-->>ESP: SUBACK granted QoS 1
+  Note over ESP: other topics are ignored, the embedded broker may replay retained ones
+
+  loop while the session is up
+    ESP->>B: publish telemetry every 15000 ms
+    ESP->>B: PINGREQ, keepalive period 60 s
+    B-->>ESP: PINGRESP
+  end
+
+  Note over ESP,B: WiFi drops or the board loses power, so no clean DISCONNECT is sent
+  B-->>PL: will published, status offline retained
+  PL->>PL: handle_status offline, insert device_offline warning
+  Note over PL: the sweeper also flags the device after 45 s without telemetry
+
+  loop every 5000 ms while WiFi is down
+    ESP->>ESP: WiFi reconnect and client connect retry
+  end
+  ESP->>B: CONNECT again, same clientId and same will
+  B-->>ESP: CONNACK accepted
+  ESP->>B: publish status online retained, birth message again
+  ESP->>B: publish telemetry immediately on the rising edge
+  B-->>PL: status online, device_offline resolved

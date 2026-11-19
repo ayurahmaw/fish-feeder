@@ -1,0 +1,78 @@
+%% title: End-to-end message sequence across device and platform
+%% source: dashboard/mqtt.py:86-111 dispatch, handlers.py:82-215
+%% source: firmware/esp32_feeder/esp32_feeder.ino:448-470 main loop
+
+sequenceDiagram
+  participant OP as Operator
+  participant DASH as Dashboard
+  participant W as Worker
+  participant DB as DB
+  participant B as Broker
+  participant ESP as ESP32
+
+  rect rgb(232, 244, 242)
+    Note over ESP,B: (a) boot and birth message
+    ESP->>B: CONNECT clientId feeder-64008c, will status offline, retain true, QoS 0
+    B-->>ESP: CONNACK accepted
+    B-->>W: session up, worker subscribes 4 topic kinds
+    ESP->>B: publish status online, retain true, QoS 0
+    B-->>W: status feeder-64008c online
+    W->>DB: handle_status, touch_device online true
+    DB-->>W: devices.is_online = 1
+  end
+
+  rect rgb(246, 249, 248)
+    Note over ESP,DB: (b) periodic telemetry and alert evaluation
+    loop every 15000 ms
+      ESP->>B: publish telemetry distance_cm 10.0 feed_level_pct 50
+      B-->>W: telemetry feeder-64008c
+      W->>DB: handle_telemetry, INSERT telemetry
+      W->>DB: touch_device online true
+      W->>DB: evaluate_feed_alerts on pct
+      alt pct <= 0
+        DB-->>W: insert feed_empty critical
+      else pct <= threshold
+        DB-->>W: insert feed_low warning
+      else pct above threshold
+        DB-->>W: resolve feed_low and feed_empty
+      end
+    end
+    DASH->>DB: read status and series, cache TTL 2 s
+    DB-->>DASH: rows for the 6 pages
+  end
+
+  rect rgb(232, 244, 242)
+    Note over OP,ESP: (c) manual feed success with ack
+    OP->>DASH: choose portions and confirm feed
+    DASH->>DB: BEGIN IMMEDIATE, insert commands sent plus feeding_logs pending
+    DASH->>B: publish command manual_feed QoS 1
+    B-->>ESP: command manual_feed portions 2
+    ESP->>ESP: feedStart, gate open 1000 ms, settle 300 ms, gap 200 ms
+    ESP->>B: publish telemetry with post-feed level
+    ESP->>B: publish ack result ok
+    B-->>W: ack cmd-... result ok
+    W->>DB: apply_ack success and attach_feed_level_after
+    DB-->>DASH: next read shows status success
+    DASH-->>OP: toast command sent, log row completed
+  end
+
+  rect rgb(255, 246, 224)
+    Note over ESP,DB: (d) failure paths
+    alt ack carries an error result
+      ESP->>B: publish ack error_busy or error_servo
+      B-->>W: ack with error result
+      W->>DB: apply_ack failed and insert feed_failed critical
+      DB-->>DASH: command failed, alert raised
+    else no ack within 30 s
+      Note over W: sweeper thread, every 10 s
+      W->>DB: sweep_timeouts 30, commands status timeout
+      W->>DB: feeding_logs failed with message timeout
+      DB-->>DASH: badge and row turn timeout
+    else device dies without DISCONNECT
+      Note over ESP,B: no clean DISCONNECT, keepalive 60 s expires
+      B-->>W: LWT status offline retained
+      W->>DB: touch_device online false
+      W->>DB: insert device_offline warning
+      DB-->>DASH: device badge offline
+    end
+  end

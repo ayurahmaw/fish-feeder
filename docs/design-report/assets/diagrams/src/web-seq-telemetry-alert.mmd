@@ -1,0 +1,41 @@
+%% title: Telemetry ingestion and feed alert evaluation
+%% source: dashboard/handlers.py:39-115 compute_pct and evaluate_feed_alerts
+%% source: dashboard/mqtt.py:86-111 tail buffer and dispatch
+
+sequenceDiagram
+  participant ESP as ESP32
+  participant B as Broker
+  participant W as Worker
+  participant H as Handlers
+  participant DB as DB
+
+  loop every 15000 ms
+    ESP->>B: publish telemetry, distance_cm and state idle
+    B-->>W: telemetry feeder-64008c
+    W->>W: append raw message to tail deque of 200
+    Note over W: Live page reads the tail, no DB hit
+    W->>H: handle_telemetry device_code and payload
+    H->>DB: ensure_device feeder-64008c
+    DB-->>H: device row with calibration
+    H->>H: compute_pct, full 3.0 cm and empty 17.0 cm
+    H->>DB: INSERT telemetry distance and feed_level_pct
+    H->>DB: touch_device online true
+    H->>DB: resolve device_offline
+    H->>H: evaluate_feed_alerts device and pct
+    alt pct at or below 0, hopper empty
+      H->>DB: resolve feed_low
+      H->>DB: has_open_notification feed_empty
+      alt no open notification
+        H->>DB: insert feed_empty critical
+      else one already open
+        H->>H: skip insert, anti-spam guard
+      end
+    else pct above 0 and at or below threshold
+      H->>DB: resolve feed_empty
+      H->>DB: has_open_notification feed_low
+      H->>DB: insert feed_low warning when none open
+    else pct above threshold
+      H->>DB: resolve feed_low and feed_empty
+    end
+    H-->>W: log line distance and level
+  end
