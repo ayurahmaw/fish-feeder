@@ -5,10 +5,13 @@
 
 Firmware adalah satu sketch Arduino dengan \code{setup()} dan \code{loop()}, tanpa
 task FreeRTOS buatan sendiri. Semua pekerjaan berlangsung di dalam \code{loop()}
-sebagai sederetan tick kooperatif: setiap tick memeriksa \code{millis()} dan segera
-kembali bila belum waktunya. Tidak ada satu pun \code{delay()} di jalur utama,
-sehingga pembacaan sensor, gerakan servo, penanganan perintah MQTT, dan pengiriman
-telemetri tidak saling mengunci.
+sebagai sederetan pemanggilan berurutan: satu langkah selesai lebih dahulu, baru
+langkah berikutnya dijalankan. Setiap tick bersifat kooperatif --- ia memeriksa
+\code{millis()} dan segera kembali bila periodenya belum tiba --- sehingga tidak ada
+\code{delay()} di jalur utama dan tidak ada pekerjaan yang tertinggal berjalan di
+latar belakang. Tumpukan jaringan ESP-IDF (WiFi, lwIP, TCP) memang berjalan pada task
+di bawah sketch, tetapi sketch sendiri tidak membuat task maupun thread: dari sudut
+pandang program hanya ada satu alur eksekusi.
 
 \code{setup()} berjalan berurutan dan mencetak hasilnya ke serial pada
 \SerialBaud{} baud: serial dibuka lalu diberi jeda singkat; perangkat keras
@@ -20,14 +23,17 @@ broker, buffer \MqttBuffer{} byte, keepalive \KeepAliveS{} detik, socket timeout
 sepuluh detik, dan callback pesan; splash ditampilkan pada LCD; lalu jarak diukur
 sekali agar telemetri pertama tidak kosong.
 
-\figref{fig:fw-flow-main-loop} memperlihatkan bentuk \code{loop()}. Perhatikan dua
-deteksi tepi naik: saat koneksi MQTT baru terbentuk, telemetri langsung dikirim
-sebagai penanda perangkat hidup; saat WiFi baru tersambung, permintaan sinkronisasi
-waktu dimulai.
+\figref{fig:fw-loop-order} memperlihatkan bentuk \code{loop()}. Kotak bernomor
+adalah urutan pemanggilan pada satu iterasi: panah selalu bergerak dari langkah yang
+lebih kecil ke langkah yang lebih besar, lalu kembali ke langkah 1, sehingga tidak ada
+dua langkah yang berjalan bersamaan. Dua deteksi tepi naik ditangani di dalam langkah
+1: saat koneksi MQTT baru terbentuk, telemetri langsung dikirim sebagai penanda
+perangkat hidup; saat WiFi baru tersambung, permintaan sinkronisasi waktu dimulai.
 
-\figureasset[\linewidth]{fw-flow-main-loop}{Alur loop utama firmware: tick kooperatif, deteksi
-tepi naik untuk telemetri awal dan sinkronisasi waktu, serta penanganan perintah
-dari antrean.}{fig:fw-flow-main-loop}
+\figuretikz[\linewidth]{fw-loop-order}{Alur \code{loop()} pada satu thread: delapan
+pemanggilan berurutan pada setiap iterasi, lalu panah kembali ke langkah 1. Kotak
+bernomor dapat memuat lebih dari satu pemanggilan berurutan; rincian tiap fungsi ada
+di \tabref{tab:04-tick}.}{fig:fw-loop-order}
 
 \tabref{tab:04-tick} merinci setiap tick dan periodenya. Periode ``setiap iterasi''
 berarti fungsi dipanggil pada setiap putaran \code{loop()} dan keluar sendiri bila

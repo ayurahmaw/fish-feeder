@@ -50,6 +50,13 @@ Bahasa Indonesia" dan pemenggalan kata menjadi salah.
 |---|---|---|
 | flowchart, sequence, state, ER | Mermaid | paling cepat diubah; bisa di-preview di GitHub/mermaid.live |
 | schematic, pinout, block diagram, timing | TikZ / Circuitikz | presisi posisi, vektor murni, tidak ada artefak render browser |
+| urutan langkah `loop()` firmware | **TikZ** (`fw-loop-order.tex`) | Mermaid `TD` selalu menarik rantai lurus menjadi kolom sempit (≈1:3), sehingga di A4 teksnya mengecil di bawah 7 pt; TikZ memberi rasio 16×10 cm dengan teks 9–10 pt |
+
+Catatan penting soal `fw-loop-order`: diagram itu sengaja **tidak** memakai fan-out. Setiap
+langkah tersambung sebagai rantai, panah kembali digambar di sisi kiri, dan ada keterangan
+"satu thread". Versi Mermaid sebelumnya menggambar tujuh tick sebagai kotak sejajar dengan
+satu panah balik, yang terbaca sebagai proses paralel — padahal firmware hanya punya satu
+super-loop.
 
 Aset dirender **dua kali**: SVG (untuk di-copy-paste ke Word/PowerPoint/Docs/GitHub) dan
 PDF (dipakai `\includegraphics`). Sumbernya `.mmd` / `.tex`, jadi semuanya tetap editable.

@@ -17,11 +17,14 @@ diambil dari singleton proses, daftar perangkat dibaca dari basis data, dan
 perangkat terpilih disimpan di state sesi. Bila basis data belum berisi satu
 perangkat pun, aplikasi berhenti dengan pesan galat alih-alih menampilkan halaman
 kosong. \figref{fig:web-flowchart} menunjukkan alur itu, dan
-\figref{fig:web-seq-bootstrap} menempatkannya sebagai urutan pesan.
+\figref{fig:web-seq-bootstrap} menempatkannya sebagai urutan pesan. Satu kali rerun
+merender tepat satu halaman: navigasi Streamlit tidak menjalankan keenam halaman
+sekaligus, dan sidebar beserta topbar dirender berurutan dari atas ke bawah sebelum
+halaman yang dipilih.
 
-\figureasset[\linewidth]{web-flowchart}{Alur dashboard: pemilihan perangkat dari sidebar,
-pemeriksaan ketersediaan perangkat, lalu penyajian salah satu dari enam
-halaman.}{fig:web-flowchart}
+\figureasset[\linewidth]{web-flowchart}{Alur dashboard satu halaman per rerun: sidebar
+dan topbar dirender berurutan, lalu satu halaman dipilih dan dirender, berakhir pada
+jalur baca atau jalur tulis.}{fig:web-flowchart}
 
 \figureasset[\linewidth]{web-seq-bootstrap}{Urutan penyalaan sesi dashboard: aplikasi membaca
 daftar perangkat, pengguna memilih satu perangkat, lalu halaman aktif
