@@ -1,0 +1,226 @@
+% Hardware block diagram — ESP32 autofeeder
+% Numbers from FACTS.md (GPIO 13/5/18/21/22, 1k+2k divider, 50 Hz, 500-2400 us,
+% 3.0/17.0 cm, I2C 0x68 / 0x27 / 0x3F).
+\documentclass[border=8pt]{standalone}
+\usepackage{xcolor}          % \definecolor must exist before colors.tex is read
+\input{preamble/colors}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,fit,backgrounds,calc,decorations.pathreplacing,patterns}
+\begin{document}
+\sffamily\small
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  >=Stealth,
+  % ---- signal / power line styles (see legend) -------------------------
+  fivev/.style={draw=crit,  line width=1.2pt},
+  threev/.style={draw=accent,line width=1.2pt},
+  gndl/.style ={draw=navy,  line width=1.2pt},
+  pwm/.style  ={draw=warn,  line width=0.9pt, dashed, -{Stealth[length=1.8mm]}},
+  gpio/.style ={draw=ink,   line width=0.8pt, densely dotted, -{Stealth[length=1.8mm]}},
+  iic/.style  ={draw=ok,    line width=1.1pt, dash pattern=on 4pt off 1.6pt},
+  mech/.style ={draw=muted, line width=0.8pt, dashed, -{Stealth[length=1.8mm]}},
+  flow/.style ={draw=muted, line width=0.7pt, -{Stealth[length=1.8mm]}},
+  % ---- blocks ----------------------------------------------------------
+  blk/.style={draw=ink, line width=0.5pt, fill=white, rounded corners=2pt,
+              align=center, inner sep=2pt},
+  blkb/.style={blk, fill=accentLight, draw=accent},
+  blkr/.style={blk, fill=critBg,      draw=crit},
+  blkm/.style={blk, fill=codeBg,      draw=muted},
+  zon/.style={rounded corners=6pt, line width=0.8pt},
+  note/.style={align=left, text=ink, inner sep=1pt},
+]
+
+% =========================================================================
+% Background voltage domains + mechanical strip
+% =========================================================================
+\filldraw[fill=critBg,      draw=crit!45,   zon] (0.30,4.40) rectangle (6.10,14.80);
+\filldraw[fill=accentLight, draw=accent!45, zon] (10.85,4.40) rectangle (15.25,14.80);
+\filldraw[fill=codeBg,      draw=muted!55,  zon] (0.30,0.20) rectangle (9.20,3.90);
+\filldraw[fill=white,       draw=muted!70,  zon] (9.50,0.20) rectangle (15.25,3.90);
+
+\node[anchor=west, font=\sffamily\bfseries\small] at (0.50,14.55) {5 V DOMAIN};
+\node[anchor=west, font=\sffamily\bfseries\small] at (11.05,14.55) {3.3 V DOMAIN};
+\node[anchor=west, font=\sffamily\bfseries\small, text=muted] at (0.50,3.58) {MECHANICAL SUBSYSTEM};
+\node[anchor=west, font=\sffamily\bfseries\small, text=muted] at (9.70,3.60) {LEGEND};
+
+% =========================================================================
+% Common ground rail (both domains)
+% =========================================================================
+\draw[gndl] (0.55,4.85) -- (15.10,4.85);
+\foreach \x in {0.55,3.05,3.90,6.00,9.65,12.60,15.05}{%
+  \fill[navy] (\x,4.85) circle (1.6pt);}
+\node[anchor=north west, text=navy, inner sep=1pt] at (10.95,4.80)
+  {GND --- common reference};
+
+% =========================================================================
+% 5 V domain
+% =========================================================================
+% --- sources -------------------------------------------------------------
+\node[blkr, minimum width=2.0cm, minimum height=0.9cm] (usb) at (1.60,13.75)
+  {USB 5 V\\\footnotesize from host};
+\node[blkr, draw=crit, dash pattern=on 3pt off 2pt,
+      minimum width=2.55cm, minimum height=0.9cm] (ext) at (4.40,13.75)
+  {External 5 V\\\footnotesize common GND};
+\node[anchor=north west, text=muted, inner sep=1pt, font=\sffamily\footnotesize]
+  at (3.15,13.22) {dashed outline = optional};
+
+% --- +5 V rail -----------------------------------------------------------
+\draw[fivev] (0.55,11.40) -- (8.60,11.40);
+\node[anchor=north west, text=crit, inner sep=2pt] at (2.05,11.33) {+5 V rail};
+
+\draw[fivev, -{Stealth[length=1.8mm]}] (1.20,13.30) -- (1.20,11.42);
+\draw[fivev, -{Stealth[length=1.8mm]}] (4.50,13.30) -- (4.50,11.42);
+
+% --- SG90 servo ----------------------------------------------------------
+\node[blk, minimum width=2.6cm, minimum height=2.2cm] (servo) at (1.90,9.50)
+  {\textbf{SG90 servo}\\[1pt] gate actuator\\[2pt]
+   PWM 50\,Hz\\ 500--2400\,$\mu$s\\ 5\,V, 700\,mA stall};
+\draw[fivev, -{Stealth[length=1.8mm]}] (1.40,10.60) -- (1.40,11.38);
+\draw[gndl,  -{Stealth[length=1.8mm]}] (3.05,8.40)  -- (3.05,4.87);
+
+% --- HC-SR04 -------------------------------------------------------------
+\node[blk, minimum width=2.4cm, minimum height=2.0cm] (sonar) at (4.80,7.10)
+  {\textbf{HC-SR04}\\[1pt] ultrasonic\\[2pt]
+   TRIG / ECHO\\ 5\,V supply\\ 3.0--17.0\,cm};
+\draw[fivev, -{Stealth[length=1.8mm]}] (4.95,8.10) -- (4.95,11.38);
+\draw[gndl,  -{Stealth[length=1.8mm]}] (3.90,6.10) -- (3.90,4.87);
+
+% --- bulk capacitor ------------------------------------------------------
+\draw[fivev] (2.55,7.70) -- (2.55,7.15);
+\draw[fivev, line width=2.4pt] (2.21,7.15) -- (2.89,7.15);
+\draw[fivev, line width=2.4pt] (2.21,6.93) -- (2.89,6.93);
+\draw[gndl]  (2.55,6.93) -- (2.55,4.85);
+\fill[crit] (2.55,7.70) circle (1.6pt);
+\node[anchor=south, text=crit, inner sep=1.5pt] at (2.55,7.76) {+5 V};
+\node[anchor=west, text=ink, inner sep=1.5pt] at (0.62,6.70) {C1};
+\node[anchor=west, text=ink, inner sep=1.5pt, font=\sffamily\footnotesize]
+  at (0.62,6.36) {470--1000\,$\mu$F};
+\node[anchor=west, text=muted, inner sep=1.5pt, font=\sffamily\footnotesize]
+  at (0.62,6.02) {near servo};
+
+% --- servo PWM signal ----------------------------------------------------
+\draw[pwm] (3.20,9.60) -- (8.58,9.60);
+\node[anchor=south west, text=warn, inner sep=1pt] at (6.35,9.68) {PWM 50\,Hz};
+
+% --- HC-SR04 signals + ECHO divider --------------------------------------
+\draw[gpio] (6.00,7.60) -- (8.58,7.60);
+\node[anchor=south west, text=ink, inner sep=1pt] at (6.40,7.66) {TRIG};
+
+\draw[gpio] (6.00,6.60) -- (6.30,6.60);
+\draw[gpio] (7.10,6.60) -- (8.58,6.60);
+\draw[ink, line width=0.8pt] (6.30,6.45) rectangle (7.10,6.75);
+\node[anchor=south, text=ink, inner sep=1.5pt, font=\sffamily\footnotesize] at (6.70,6.90) {R1 = 1\,k$\Omega$};
+\fill[ink] (7.30,6.60) circle (1.6pt);
+\draw[ink, line width=0.8pt] (7.15,6.05) rectangle (7.45,5.45);
+\draw[ink, line width=0.8pt] (7.30,6.60) -- (7.30,6.05);
+\draw[ink, line width=0.8pt] (7.30,5.45) -- (7.30,4.87);
+\node[anchor=west, text=ink, inner sep=1.5pt] at (7.52,5.58) {R2 2\,k$\Omega$};
+\node[anchor=north east, text=ok, inner sep=1.5pt, font=\sffamily\footnotesize] at (8.44,6.46) {ECHO 3V3};
+
+
+% =========================================================================
+% ESP32 board (sits between the two domains)
+% =========================================================================
+\node[blkb, minimum width=2.1cm, minimum height=8.2cm, line width=1pt] (mcu) at (9.65,9.70) {};
+\node[anchor=north, font=\sffamily\bfseries\small, text=accent] at (9.65,13.72) {ESP32};
+\node[anchor=north, font=\sffamily\bfseries\small, text=accent] at (9.65,13.38) {WROOM-32};
+\node[anchor=north, text=ink] at (9.65,13.04) {DevKit V1};
+\node[anchor=north, text=ink] at (9.65,12.70) {30-pin};
+\node[anchor=north, text=muted, font=\sffamily\footnotesize] at (9.65,12.36) {3.3 V logic};
+
+\node[anchor=west, text=crit,   inner sep=1.5pt] at (8.68,11.40) {VIN 5\,V};
+\node[anchor=west, text=warn,   inner sep=1.5pt] at (8.68,9.60)  {GPIO 13};
+\node[anchor=west, text=ink,    inner sep=1.5pt] at (8.68,7.60)  {GPIO 5};
+\node[anchor=west, text=ink,    inner sep=1.5pt] at (8.68,6.60)  {GPIO 18};
+
+\node[anchor=east, text=accent, inner sep=1.5pt] at (10.62,11.00) {3V3};
+\node[anchor=east, text=ok,     inner sep=1.5pt] at (10.62,9.34)  {SDA 21};
+\node[anchor=east, text=ok,     inner sep=1.5pt] at (10.62,8.92)  {SCL 22};
+
+\node[draw=accent, fill=white, rounded corners=2pt, line width=0.5pt,
+      minimum width=1.7cm, minimum height=0.6cm, align=center,
+      font=\sffamily\footnotesize, text=accent] (ldo) at (9.65,6.05)
+  {on-board\\3.3 V LDO};
+\draw[accent, line width=0.6pt] (9.65,5.74) -- (9.65,5.62);
+
+\draw[gndl, -{Stealth[length=1.8mm]}] (9.65,5.62) -- (9.65,4.87);
+\node[anchor=east, text=navy, inner sep=1.5pt] at (9.42,5.02) {GND};
+
+% =========================================================================
+% 3.3 V domain
+% =========================================================================
+\draw[threev] (10.70,11.00) -- (14.88,11.00);
+\node[anchor=south east, text=accent, inner sep=1pt] at (12.60,11.04) {+3V3 rail};
+
+% --- I2C bus -------------------------------------------------------------
+\draw[iic] (10.70,9.34) -- (11.30,9.34);
+\draw[iic] (10.70,8.92) -- (11.30,8.92);
+\draw[iic] (11.30,9.34) -- (11.30,6.30) -- (11.54,6.30);
+\draw[iic] (11.30,8.60) -- (11.54,8.60);
+
+\node[blkb, minimum width=3.1cm, minimum height=1.55cm] (rtc) at (13.10,8.85)
+  {\textbf{DS3231 RTC}\\[1pt] 0x68\\ CR2032 backup};
+\node[blkb, minimum width=3.1cm, minimum height=1.7cm] (lcd) at (13.10,6.25)
+  {\textbf{LCD1602 + PCF8574}\\[1pt] 0x27 (alt. 0x3F)\\ 16$\times$2, 3.3\,V};
+\node[anchor=south west, align=left, text=ok, inner sep=1pt, font=\sffamily\footnotesize]
+  at (11.38,7.14) {I\textsuperscript{2}C bus, 100\,kHz\\SDA 21 / SCL 22};
+
+\draw[threev, -{Stealth[length=1.8mm]}] (12.90,11.00) -- (12.90,9.64);
+\draw[threev] (14.60,11.00) -- (14.88,11.00) -- (14.88,6.30) -- (14.72,6.30);
+\draw[gndl, -{Stealth[length=1.8mm]}] (14.70,8.60) -- (15.05,8.60) -- (15.05,4.87);
+\draw[gndl, -{Stealth[length=1.8mm]}] (12.60,5.40) -- (12.60,4.87);
+
+% =========================================================================
+% Mechanical subsystem
+% =========================================================================
+\node[blkm, minimum width=2.1cm, minimum height=0.8cm] (hop) at (1.70,3.02) {Hopper};
+\node[blkm, minimum width=1.1cm, minimum height=0.45cm, font=\sffamily\footnotesize]
+  (gate) at (1.70,2.30) {gate};
+\node[anchor=west, text=muted, inner sep=2pt, font=\sffamily\footnotesize]
+  at (2.42,2.30) {linkage};
+\draw[ink, line width=2pt] (0.90,1.55) -- (3.30,1.55);
+\node[anchor=north, text=ink, inner sep=1.5pt] at (1.45,1.48) {Feed surface};
+\draw[flow] (1.70,2.62) -- (1.70,2.54);
+\draw[flow] (1.70,2.07) -- (1.70,1.62);
+
+% distance measurement bracket
+\draw[decorate, decoration={brace,amplitude=4pt}, draw=muted, line width=0.6pt]
+  (3.45,1.60) -- (3.45,3.35);
+\draw[muted, line width=0.5pt, densely dotted] (2.76,3.35) -- (3.45,3.35);
+\draw[muted, line width=0.5pt, densely dotted] (3.30,1.60) -- (3.45,1.60);
+\node[anchor=west, align=left, font=\sffamily\footnotesize, text=muted, inner sep=2pt]
+  at (3.60,2.55) {3.0\,cm full\\[1pt] 17.0\,cm empty};
+
+\node[note, anchor=west] at (5.55,1.70)
+  {\footnotesize level $=\frac{17.0-d}{17.0-3.0}\times 100\,\%$\\[5pt]
+   \footnotesize sensor range 40\,cm max};
+
+% dashed "what the sensor looks at"
+\draw[mech] (4.95,6.06) -- (3.55,3.95);
+\node[anchor=west, text=muted, font=\sffamily\footnotesize, inner sep=1pt]
+  at (4.85,5.28) {measures};
+
+% =========================================================================
+% Legend
+% =========================================================================
+\foreach \yy/\st/\lab in {%
+  3.28/fivev/{+5 V rail \textendash{} 5 V domain},
+  2.94/threev/{+3V3 rail \textendash{} 3.3 V domain},
+  2.60/gndl/{GND, shared by both domains},
+  2.26/iic/{I\textsuperscript{2}C bus (SDA / SCL)},
+  1.92/pwm/{PWM, 50 Hz, 500--2400 $\mu$s},
+  1.58/gpio/{GPIO pulse (TRIG / ECHO)},
+  1.24/mech/{mechanical link / measurement}}={
+  \draw[\st] (9.70,\yy) -- (10.55,\yy);
+  \node[anchor=west, inner sep=1.5pt] at (10.65,\yy) {\lab};
+}
+\draw[draw=ink, line width=0.8pt] (9.70,0.88) -- (9.98,0.88);
+\draw[draw=ink, line width=0.8pt, fill=white] (9.98,0.81) rectangle (10.27,0.95);
+\draw[draw=ink, line width=0.8pt] (10.27,0.88) -- (10.55,0.88);
+\node[anchor=west, inner sep=1.5pt, font=\sffamily\small] at (10.65,0.88)
+  {1 k$\Omega$ + 2 k$\Omega$ divider};
+\node[anchor=west, font=\sffamily\footnotesize, text=muted, inner sep=1.5pt]
+  at (9.70,0.50) {no dot = not connected};
+
+\end{tikzpicture}
+\end{document}

@@ -1,0 +1,234 @@
+% Relational schema — feeder_db (SQLite), 6 tables + 1 view + 6 explicit indexes
+% Column names, FKs and ON DELETE rules from database/schema.sql.
+\documentclass[border=8pt]{standalone}
+\usepackage{xcolor}          % \definecolor must exist before colors.tex is read
+\input{preamble/colors}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,fit,backgrounds,calc,decorations.pathreplacing,patterns}
+\begin{document}
+\sffamily\small
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  >=Stealth,
+  box/.style={line width=0.9pt, rounded corners=2pt},
+  pk/.style={anchor=west, font=\sffamily\bfseries\footnotesize, text=ink, inner sep=1pt},
+  fk/.style={anchor=west, font=\sffamily\footnotesize, text=ink, inner sep=1pt},
+  row/.style={anchor=west, font=\sffamily\footnotesize, text=ink, inner sep=1pt},
+  tag/.style={anchor=east, font=\sffamily\footnotesize, text=muted, inner sep=1pt},
+  rel/.style={draw=ink, line width=0.9pt},
+  reld/.style={draw=muted, line width=0.9pt, dashed},
+  crowsolid/.style={draw=ink, line width=0.9pt},
+  crowdash/.style={draw=muted, line width=0.9pt, dashed},
+  one/.style={draw=ink, line width=0.9pt},
+]
+
+% =========================================================================
+% devices (core / identity)
+% =========================================================================
+\filldraw[box, fill=white, draw=accent] (0.60,11.90) rectangle (4.20,16.20);
+\filldraw[fill=accentLight, draw=accent, line width=0.9pt] (0.60,15.70) rectangle (4.20,16.20);
+\node[anchor=west, font=\sffamily\bfseries\footnotesize, text=accent] at (0.72,15.95) {devices};
+\node[pk] (p1) at (0.74,15.40) {\underline{id}};
+\node[tag] at (4.10,15.40) {PK};
+\foreach \r [count=\i from 1] in {device\_code, name, location, timezone, sensor\_full\_cm,
+   sensor\_empty\_cm, low\_feed\_threshold\_pct, is\_online, last\_seen\_at, created\_at, updated\_at}{%
+  \node[row] at (0.74,15.40-0.30*\i) {\r};}
+\node[tag] at (4.10,15.10) {U};
+
+% =========================================================================
+% telemetry (time-series)
+% =========================================================================
+\filldraw[box, fill=white, draw=navy] (5.60,10.40) rectangle (9.60,12.82);
+\filldraw[fill=codeBg, draw=navy, line width=0.9pt] (5.60,12.38) rectangle (9.60,12.82);
+\node[anchor=west, font=\sffamily\bfseries\footnotesize, text=navy] at (5.72,12.60) {telemetry};
+\node[pk] (p2) at (5.74,12.08) {\underline{id}};
+\node[tag] at (9.50,12.08) {PK};
+\foreach \r [count=\i from 1] in {\textcolor{navy}{\textrightarrow}\ device\_id, distance\_cm,
+   feed\_level\_pct, state, recorded\_at}{%
+  \node[row] at (5.74,12.08-0.30*\i) {\r};}
+\node[tag] at (9.50,11.78) {FK};
+
+% =========================================================================
+% schedules (configuration)
+% =========================================================================
+\filldraw[box, fill=white, draw=warn] (5.60,6.60) rectangle (9.60,9.62);
+\filldraw[fill=warnBg, draw=warn, line width=0.9pt] (5.60,9.18) rectangle (9.60,9.62);
+\node[anchor=west, font=\sffamily\bfseries\footnotesize, text=warn] at (5.72,9.40) {schedules};
+\node[pk] (p3) at (5.74,8.88) {\underline{id}};
+\node[tag] at (9.50,8.88) {PK};
+\foreach \r [count=\i from 1] in {\textcolor{warn}{\textrightarrow}\ device\_id, name, feed\_time,
+   portions, is\_active, created\_at, updated\_at}{%
+  \node[row] at (5.74,8.88-0.30*\i) {\r};}
+\node[tag] at (9.50,8.58) {FK};
+
+% =========================================================================
+% feeding_logs (transactional)
+% =========================================================================
+\filldraw[box, fill=white, draw=ok] (5.60,1.20) rectangle (9.60,5.90);
+\filldraw[fill=ok!14, draw=ok, line width=0.9pt] (5.60,5.46) rectangle (9.60,5.90);
+\node[anchor=west, font=\sffamily\bfseries\footnotesize, text=ok] at (5.72,5.68) {feeding\_logs};
+\node[pk] (p4) at (5.74,5.16) {\underline{id}};
+\node[tag] at (9.50,5.16) {PK};
+\foreach \r [count=\i from 1] in {\textcolor{ok}{\textrightarrow}\ device\_id, command\_id,
+   trigger\_type, \textcolor{ok}{\textrightarrow}\ schedule\_id, portions, status, message,
+   distance\_before\_cm, distance\_after\_cm, feed\_level\_before\_pct,
+   feed\_level\_after\_pct, requested\_at, completed\_at}{%
+  \node[row] at (5.74,5.16-0.285*\i) {\r};}
+
+% =========================================================================
+% commands (transactional)
+% =========================================================================
+\filldraw[box, fill=white, draw=ok] (10.60,2.10) rectangle (14.60,5.72);
+\filldraw[fill=ok!14, draw=ok, line width=0.9pt] (10.60,5.28) rectangle (14.60,5.72);
+\node[anchor=west, font=\sffamily\bfseries\footnotesize, text=ok] at (10.72,5.50) {commands};
+\node[pk] (p5) at (10.74,4.98) {\underline{id}};
+\node[tag] at (14.50,4.98) {PK};
+\foreach \r [count=\i from 1] in {command\_id, \textcolor{ok}{\textrightarrow}\ device\_id, type,
+   payload, status, result\_message, created\_at, acked\_at}{%
+  \node[row] at (10.74,4.98-0.30*\i) {\r};}
+\node[tag] at (14.50,4.68) {U};
+\node[tag] at (14.50,4.38) {FK};
+
+% =========================================================================
+% notifications (alerting)
+% =========================================================================
+\filldraw[box, fill=white, draw=crit] (10.60,12.60) rectangle (14.60,15.92);
+\filldraw[fill=critBg, draw=crit, line width=0.9pt] (10.60,15.48) rectangle (14.60,15.92);
+\node[anchor=west, font=\sffamily\bfseries\footnotesize, text=crit] at (10.72,15.70) {notifications};
+\node[pk] (p6) at (10.74,15.18) {\underline{id}};
+\node[tag] at (14.50,15.18) {PK};
+\foreach \r [count=\i from 1] in {\textcolor{crit}{\textrightarrow}\ device\_id, type, severity,
+   title, message, feed\_level\_pct, is\_read, created\_at}{%
+  \node[row] at (10.74,15.18-0.30*\i) {\r};}
+\node[tag] at (14.50,14.88) {FK};
+
+% =========================================================================
+% v_device_status (view)
+% =========================================================================
+\filldraw[box, draw=muted, dash pattern=on 4pt off 2pt, fill=canvas] (0.60,6.60) rectangle (4.20,11.30);
+\node[anchor=west, font=\sffamily\bfseries\footnotesize, text=muted] at (0.72,11.05)
+  {v\_device\_status \ (view)};
+\node[anchor=west, font=\sffamily\footnotesize, text=muted] at (0.72,10.72)
+  {1 row per device};
+\foreach \r [count=\i from 1] in {device\_id, device\_code, name, location, sensor\_full\_cm,
+   sensor\_empty\_cm, low\_feed\_threshold\_pct, is\_online, last\_seen\_at, distance\_cm,
+   feed\_level\_pct, state, measured\_at, is\_empty, is\_low}{%
+  \node[row, text=muted] at (0.74,10.42-0.24*\i) {\r};}
+
+% =========================================================================
+% relationships from devices (1 : N, ON DELETE CASCADE)
+% =========================================================================
+% devices -> telemetry
+\draw[rel] (4.20,12.40) -- (5.30,12.40);
+\draw[one] (4.32,12.30) -- (4.32,12.50);
+\draw[crowsolid] (5.30,12.40) -- (5.60,12.18);
+\draw[crowsolid] (5.30,12.40) -- (5.60,12.40);
+\draw[crowsolid] (5.30,12.40) -- (5.60,12.62);
+\node[anchor=east, font=\sffamily\footnotesize, text=muted, fill=white, inner sep=1pt] at (5.24,12.40) {N};
+
+% devices -> schedules
+\draw[rel] (4.20,13.10) -- (4.90,13.10) -- (4.90,8.20) -- (5.30,8.20);
+\draw[one] (4.32,13.00) -- (4.32,13.20);
+\draw[crowsolid] (5.30,8.20) -- (5.60,7.98);
+\draw[crowsolid] (5.30,8.20) -- (5.60,8.20);
+\draw[crowsolid] (5.30,8.20) -- (5.60,8.42);
+\node[anchor=east, font=\sffamily\footnotesize, text=muted, fill=white, inner sep=1pt] at (5.24,8.20) {N};
+
+% devices -> feeding_logs
+\draw[rel] (4.20,13.70) -- (4.70,13.70) -- (4.70,3.60) -- (5.30,3.60);
+\draw[one] (4.32,13.60) -- (4.32,13.80);
+\draw[crowsolid] (5.30,3.60) -- (5.60,3.38);
+\draw[crowsolid] (5.30,3.60) -- (5.60,3.60);
+\draw[crowsolid] (5.30,3.60) -- (5.60,3.82);
+\node[anchor=east, font=\sffamily\footnotesize, text=muted, fill=white, inner sep=1pt] at (5.24,3.60) {N};
+
+% devices -> notifications (over the top)
+\draw[rel] (1.40,16.20) -- (1.40,16.72) -- (12.60,16.72) -- (12.60,16.22);
+\node[anchor=south, font=\sffamily\footnotesize, text=muted] at (1.55,16.74) {1};
+\draw[crowsolid] (12.60,16.22) -- (12.38,15.92);
+\draw[crowsolid] (12.60,16.22) -- (12.60,15.92);
+\draw[crowsolid] (12.60,16.22) -- (12.82,15.92);
+\node[anchor=west, font=\sffamily\footnotesize, text=muted] at (12.88,16.04) {N};
+
+\node[anchor=south west, font=\sffamily\footnotesize, text=accent] at (4.80,16.80)
+  {all five child tables: ON DELETE CASCADE};
+
+% =========================================================================
+% schedules 1 : 0..N feeding_logs (SET NULL)
+% =========================================================================
+\draw[rel] (7.10,6.60) -- (7.10,6.34);
+\draw[one] (7.00,6.50) -- (7.20,6.50);
+\draw[crowsolid] (7.10,6.34) -- (6.88,5.90);
+\draw[crowsolid] (7.10,6.34) -- (7.10,5.90);
+\draw[crowsolid] (7.10,6.34) -- (7.32,5.90);
+\node[anchor=west, font=\sffamily\footnotesize, text=warn] at (7.45,6.47)
+  {0..N, ON DELETE SET NULL};
+\node[anchor=west, font=\sffamily\footnotesize, text=crit] at (7.45,6.20)
+  {always NULL in practice};
+
+% =========================================================================
+% commands 1 : 0..1 feeding_logs (dashed, no FK)
+% =========================================================================
+\draw[reld] (10.60,3.90) -- (10.15,3.90) -- (10.15,2.70) -- (9.90,2.70);
+\draw[crowdash] (9.90,2.70) -- (9.60,2.48);
+\draw[crowdash] (9.90,2.70) -- (9.60,2.70);
+\draw[crowdash] (9.90,2.70) -- (9.60,2.92);
+\node[anchor=south, font=\sffamily\footnotesize, text=muted] at (9.78,3.00) {0..1};
+
+% =========================================================================
+% devices 1 : 1 v_device_status
+% =========================================================================
+\draw[reld] (2.40,11.90) -- (2.40,11.30);
+\node[anchor=east, font=\sffamily\footnotesize, text=muted] at (2.30,11.60) {1:1};
+
+% =========================================================================
+% Index list (footnote box)
+% =========================================================================
+\filldraw[fill=white, draw=muted!70, line width=0.7pt, rounded corners=3pt]
+  (0.60,0.60) rectangle (4.45,5.90);
+\node[anchor=north west, font=\sffamily\bfseries\footnotesize, text=muted] at (0.75,5.76)
+  {6 EXPLICIT INDEXES};
+\node[anchor=north west, font=\sffamily\footnotesize, text=ink, align=left] at (0.75,5.42)
+  {idx\_telemetry\_device\_time\\ \ (device\_id, recorded\_at)\\[1pt]
+   idx\_schedules\_device\_active\\ \ (device\_id, is\_active,\\ \ \ feed\_time)\\[1pt]
+   idx\_commands\_device\_time\\ \ (device\_id, created\_at)\\[1pt]
+   idx\_feeding\_device\_time\\ \ (device\_id, requested\_at)\\[1pt]
+   idx\_feeding\_status\ (status)\\[1pt]
+   idx\_notifications\_device\\ \ (device\_id, is\_read,\\ \ \ created\_at)\\[3pt]
+   {\color{muted}plus 2 UNIQUE autoindexes:}\\ {\color{muted}devices.device\_code,}\\ {\color{muted}commands.command\_id}};
+
+% =========================================================================
+% Legend / colour code
+% =========================================================================
+\filldraw[fill=white, draw=muted!70, line width=0.7pt, rounded corners=3pt]
+  (10.60,6.40) rectangle (14.60,12.00);
+\node[anchor=north west, font=\sffamily\bfseries\footnotesize, text=muted] at (10.75,11.88)
+  {COLOUR CODE};
+
+\foreach \y/\c/\lab in {%
+ 11.28/accent/{core / identity},
+ 10.76/navy/{time-series data},
+ 10.24/ok/{transactional},
+  9.72/warn/{configuration},
+  9.20/crit/{alerting}}{%
+  \filldraw[fill=\c, draw=\c!80!black, line width=0.6pt] (10.80,\y-0.14) rectangle (11.30,\y+0.14);
+  \node[anchor=west, font=\sffamily\footnotesize] at (11.40,\y) {\lab};}
+
+\node[anchor=north west, font=\sffamily\bfseries\footnotesize, text=muted] at (10.75,8.86)
+  {SYMBOLS};
+\node[pk, anchor=west] at (10.80,8.40) {\underline{id}};
+\node[anchor=west, font=\sffamily\footnotesize] at (11.40,8.40) {primary key};
+\node[anchor=west, font=\sffamily\footnotesize, text=navy] at (10.80,7.98) {\textrightarrow};
+\node[anchor=west, font=\sffamily\footnotesize] at (11.40,7.98) {foreign key};
+\draw[rel] (10.80,7.58) -- (11.20,7.58);
+\draw[crowsolid] (11.20,7.58) -- (11.45,7.45);
+\draw[crowsolid] (11.20,7.58) -- (11.45,7.58);
+\draw[crowsolid] (11.20,7.58) -- (11.45,7.71);
+\node[anchor=west, font=\sffamily\footnotesize] at (11.55,7.58) {crow's foot = many};
+\draw[reld] (10.80,7.16) -- (11.45,7.16);
+\node[anchor=west, font=\sffamily\footnotesize] at (11.55,7.16) {dashed = no real FK};
+\node[anchor=west, font=\sffamily\footnotesize, text=muted] at (10.80,6.74)
+  {SQLite: PRAGMA foreign\_keys = ON};
+
+\end{tikzpicture}
+\end{document}

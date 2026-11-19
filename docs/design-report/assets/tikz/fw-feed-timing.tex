@@ -1,0 +1,125 @@
+% Feed timing — 2-portion manual feed (2800 ms total)
+% PORTION_OPEN_MS 1000, SERVO_SETTLE_MS 300, PORTION_GAP_MS 200 (config.h);
+% phase machine FEED_IDLE / OPEN / CLOSING / GAP (esp32_feeder.ino).
+\documentclass[border=8pt]{standalone}
+\usepackage{xcolor}          % \definecolor must exist before colors.tex is read
+\input{preamble/colors}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,fit,backgrounds,calc,decorations.pathreplacing,patterns}
+\begin{document}
+\sffamily\small
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  >=Stealth,
+  % time -> x mapping: 0..3000 ms across 1.70..15.00 cm
+  brace/.style={decorate, decoration={brace, amplitude=3.4pt}, draw=muted, line width=0.6pt},
+  braceb/.style={decorate, decoration={brace, amplitude=5pt, mirror}, draw=ink, line width=0.7pt},
+  helper/.style={draw=muted, line width=0.5pt, densely dotted},
+  pha/.style={draw=ink, line width=0.7pt, fill=white, align=center,
+              font=\sffamily\footnotesize, inner sep=1pt},
+  tick/.style={draw=muted, line width=0.5pt},
+  ]
+
+% =========================================================================
+% (a) servo gate angle
+% =========================================================================
+\node[anchor=west, text=ink, font=\sffamily\bfseries\small] at (0.20,10.00) {(a)};
+\node[anchor=west, text=ink, align=left, font=\sffamily\footnotesize] at (0.20,9.55)
+  {servo gate\\angle};
+
+% axis ends of the angle row
+\draw[helper] (1.70,9.00) -- (15.00,9.00);
+
+\draw[draw=accent, line width=1.6pt]
+  (1.70,9.00) -- (1.70,11.00) --
+  ({1.70+1000*0.0044333},11.00) -- ({1.70+1000*0.0044333},9.00) --
+  ({1.70+1500*0.0044333},9.00)  -- ({1.70+1500*0.0044333},11.00) --
+  ({1.70+2500*0.0044333},11.00) -- ({1.70+2500*0.0044333},9.00) --
+  ({1.70+2800*0.0044333},9.00)  -- (15.00,9.00);
+
+\node[anchor=east, text=accent, font=\sffamily\footnotesize] at (1.62,11.00) {90\textdegree};
+\node[anchor=east, text=accent, font=\sffamily\footnotesize] at (1.62,9.00)  {0\textdegree};
+\node[anchor=center, text=accent, font=\sffamily\footnotesize] at ({1.70+500*0.0044333},10.45) {90\textdegree\ open};
+\node[anchor=center, text=accent, font=\sffamily\footnotesize] at ({1.70+1250*0.0044333},9.35) {0\textdegree};
+\node[anchor=center, text=accent, font=\sffamily\footnotesize] at ({1.70+2000*0.0044333},10.45) {90\textdegree\ open};
+\node[anchor=center, text=accent, font=\sffamily\footnotesize] at ({1.70+2650*0.0044333},9.35) {0\textdegree};
+
+
+
+% =========================================================================
+% duration braces over row (a)
+% =========================================================================
+\foreach \a/\b/\lab in {%
+  0/1000/{1000 ms},
+  1000/1300/{300 ms},
+  1300/1500/{200 ms},
+  1500/2500/{1000 ms},
+  2500/2800/{300 ms}}{%
+  \draw[brace] ({1.70+\a*0.0044333},11.10) -- ({1.70+\b*0.0044333},11.10);
+  \node[anchor=south, text=ink, font=\sffamily\footnotesize, inner sep=1.5pt]
+    at ({1.70+(\a+\b)/2*0.0044333},11.16) {\lab};}
+
+% =========================================================================
+% (b) firmware phase
+% =========================================================================
+\node[anchor=west, text=ink, font=\sffamily\bfseries\small] at (0.20,7.62) {(b)};
+\node[anchor=west, text=ink, align=left, font=\sffamily\footnotesize] at (0.20,6.95)
+  {firmware\\phase};
+
+\foreach \a/\b/\lab/\col in {%
+  0/1000/OPEN/accentLight,
+  1000/1300/CLOSING/accentMid,
+  1300/1500/GAP/codeBg,
+  1500/2500/OPEN/accentLight,
+  2500/2800/CLOSING/accentMid,
+  2800/3000/IDLE/codeBg}{%
+  \draw[pha, fill=\col] ({1.70+\a*0.0044333},6.60) rectangle ({1.70+\b*0.0044333},8.00);
+  \node[anchor=center, font=\sffamily\footnotesize, text=ink]
+    at ({1.70+(\a+\b)/2*0.0044333},7.30) {\lab};}
+
+% helper lines from phase edges up to the angle waveform
+\foreach \t in {0,1000,1300,1500,2500,2800}{
+  \draw[helper] ({1.70+\t*0.0044333},8.00) -- ({1.70+\t*0.0044333},9.00);}
+
+% =========================================================================
+% time axis
+% =========================================================================
+\draw[draw=ink, line width=0.8pt, -{Stealth[length=1.8mm]}] (1.60,5.80) -- (15.20,5.80);
+\node[anchor=south east, text=ink, font=\sffamily\footnotesize] at (15.17,5.86) {time (ms)};
+\foreach \t in {0,200,...,3000}{%
+  \draw[tick] ({1.70+\t*0.0044333},5.80) -- ({1.70+\t*0.0044333},5.55);
+  \node[anchor=north, text=muted, font=\sffamily\footnotesize, inner sep=1.5pt]
+    at ({1.70+\t*0.0044333},5.52) {\t};}
+
+% labels of the two rows on the axis
+\foreach \t in {0,1000,1300,1500,2500,2800}{
+  \draw[helper] ({1.70+\t*0.0044333},6.60) -- ({1.70+\t*0.0044333},5.80);}
+
+% =========================================================================
+% total duration
+% =========================================================================
+\draw[braceb] (1.70,4.35) -- ({1.70+2800*0.0044333},4.35);
+\node[anchor=north, text=ink, font=\sffamily\small, inner sep=2pt]
+  at ({1.70+1400*0.0044333},4.20) {\textbf{2800 ms} for 2 portions};
+
+% =========================================================================
+% callout
+% =========================================================================
+\filldraw[fill=white, draw=accent!60, line width=0.7pt, rounded corners=3pt]
+  (0.20,0.88) rectangle (15.20,3.55);
+\node[anchor=north west, font=\sffamily\bfseries\small, text=accent] at (0.40,3.42)
+  {END OF FEED};
+\node[anchor=north west, align=left, font=\sffamily\footnotesize, text=ink] at (0.40,3.02)
+  {\texttt{finishFeed()}: close the gate $\rightarrow$ measure the distance $\rightarrow$
+   publish \texttt{telemetry} $\rightarrow$ publish \texttt{ack} (manual feed);\\
+   for a scheduled feed it publishes \texttt{state} (\texttt{scheduled\_feed}) and then \texttt{telemetry};\\
+   \textbf{every extra portion adds 1500 ms} (1000 open + 300 settle + 200 gap).};
+
+\node[anchor=north west, align=left, font=\sffamily\footnotesize, text=muted] at (0.40,2.06)
+  {PWM 50 Hz, 500--2400 $\mu$s (500 $\mu$s = 0\textdegree, 2400 $\mu$s = 90\textdegree);
+   servo signal on GPIO 13\\[1pt]
+   \texttt{PORTION\_OPEN\_MS} = 1000 ms, \texttt{SERVO\_SETTLE\_MS} = 300 ms,
+   \texttt{PORTION\_GAP\_MS} = 200 ms \textendash{} \texttt{config.h}};
+
+\end{tikzpicture}
+\end{document}

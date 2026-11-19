@@ -1,0 +1,214 @@
+% Full wiring schematic — ESP32 autofeeder (circuitikz)
+% Pins/nets from FACTS.md: GPIO 13 / 5 / 18 / 21 / 22, 1k+2k ECHO divider,
+% 5 V and 3.3 V domains, DS3231 (0x68) and PCF8574 LCD (0x27 / 0x3F) on one bus.
+\documentclass[border=8pt]{standalone}
+\usepackage{xcolor}          % \definecolor must exist before colors.tex is read
+\input{preamble/colors}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,fit,backgrounds,calc,decorations.pathreplacing,patterns}
+\usepackage{circuitikz}
+\begin{document}
+\sffamily\small
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  >=Stealth,
+  % nets
+  p5/.style   ={draw=crit,   line width=1.1pt},
+  p33/.style  ={draw=accent, line width=1.1pt},
+  gnd/.style  ={draw=navy,   line width=1.1pt},
+  pwm/.style  ={draw=warn,   line width=1.1pt, dashed},
+  sig/.style  ={draw=ink,    line width=0.9pt},
+  iic/.style  ={draw=ok,     line width=1.0pt, dash pattern=on 4pt off 1.6pt},
+  opt/.style  ={draw=muted,  line width=0.8pt, dashed},
+  % blocks
+  mod/.style={draw=ink, line width=0.6pt, fill=white, rounded corners=2pt,
+              align=center, inner sep=2pt},
+  mod5/.style={mod, fill=critBg,      draw=crit},
+  mod3/.style={mod, fill=accentLight, draw=accent},
+  mcu/.style={draw=accent, line width=1.1pt, fill=white, rounded corners=3pt},
+  pin/.style={fill=white, draw=ink, line width=0.6pt},
+  netlab/.style={font=\sffamily\footnotesize, inner sep=1.5pt},
+]
+\ctikzset{bipoles/length=1.0cm, resistors/scale=0.8, capacitors/scale=0.9, label/align=smart}
+
+% =========================================================================
+% Nets at the top
+% =========================================================================
+\draw[p5]  (0.50,15.90) -- (7.60,15.90);
+\draw[p33] (9.70,15.90) -- (15.30,15.90);
+\node[anchor=south west, text=crit,   font=\sffamily\bfseries\small] at (0.55,15.95) {+5V};
+\node[anchor=south west, text=accent, font=\sffamily\bfseries\small] at (9.75,15.95) {+3V3};
+
+% =========================================================================
+% ESP32 board
+% =========================================================================
+\draw[mcu] (6.70,8.00) rectangle (9.50,15.60);
+\node[anchor=north, font=\sffamily\bfseries\small, text=accent] at (8.10,15.48) {ESP32-WROOM-32};
+\node[anchor=north, text=ink, align=center] at (8.10,15.14) {DevKit V1\\30-pin};
+
+% pins
+\foreach \y/\lab in {13.20/GPIO13, 9.60/GPIO5, 9.00/GPIO18}{
+  \node[pin] at (6.70,\y) {};
+  \node[anchor=west, text=ink, inner sep=2.5pt] at (6.80,\y) {\lab};}
+\foreach \y/\lab/\col in {14.60/3V3/accent, 12.50/GPIO21/ok, 11.90/GPIO22/ok}{
+  \node[pin] at (9.50,\y) {};
+  \node[anchor=east, text=\col, inner sep=2.5pt] at (9.48,\y) {\lab};}
+\node[pin] at (7.60,15.60) {};
+\node[pin] at (7.60,8.00) {};
+\node[pin] at (8.90,8.00) {};
+
+% supply / ground stubs
+\draw[p5,  -{Stealth[length=1.6mm]}] (7.60,15.60) -- (7.60,15.88);
+\node[anchor=south west, text=crit, netlab] at (7.66,15.62) {5V (VIN)};
+\draw[gnd] (7.60,8.00) -- (7.60,7.45);
+\draw[gnd] (8.90,8.00) -- (8.90,7.45);
+\draw[gnd] (7.60,7.45) -- (8.90,7.45);
+\node[ground] at (8.25,7.45) {};
+\node[anchor=west, text=navy, netlab] at (9.02,7.30) {GND};
+
+% 3V3 pin into the +3V3 net
+\draw[p33] (9.50,14.60) -- (9.70,14.60) -- (9.70,15.90);
+
+% =========================================================================
+% J1 — SG90 servo header (5 V)
+% =========================================================================
+\draw[mod5] (0.80,11.90) rectangle (3.40,14.80);
+\node[anchor=north, font=\sffamily\bfseries\small, text=crit] at (2.10,14.72) {J1 \;\textemdash\; SG90};
+\node[anchor=north, font=\sffamily\footnotesize, text=ink] at (2.10,14.40) {3-pin header};
+\foreach \y/\lab/\col in {13.90/+5V/crit, 13.20/signal/warn, 12.50/GND/navy}{
+  \node[pin] at (3.40,\y) {};
+  \node[anchor=east, text=\col, font=\sffamily\footnotesize, inner sep=2.5pt] at (3.38,\y) {\lab};}
+
+\draw[p5, -{Stealth[length=1.6mm]}] (3.40,13.90) -- (4.30,13.90) -- (4.30,15.88);
+\draw[pwm] (3.40,13.20) -- (6.70,13.20);
+\node[anchor=south, text=warn, netlab] at (5.05,13.26) {GPIO13\_PWM};
+\draw[gnd] (3.40,12.50) -- (5.20,12.50) -- (5.20,12.25);
+\node[ground] at (5.20,12.25) {};
+
+% =========================================================================
+% HC-SR04 (5 V)
+% =========================================================================
+\draw[mod5] (0.80,7.80) rectangle (3.40,11.50);
+\node[anchor=north, font=\sffamily\bfseries\small, text=crit] at (2.10,11.42) {HC-SR04};
+\node[anchor=north, align=center, font=\sffamily\footnotesize, text=ink] at (2.10,11.10)
+  {ultrasonic\\3.0--17.0 cm};
+\foreach \y/\lab/\col in {10.20/VCC/crit, 9.60/TRIG/ink, 9.00/ECHO/ink, 8.40/GND/navy}{
+  \node[pin] at (3.40,\y) {};
+  \node[anchor=east, text=\col, font=\sffamily\footnotesize, inner sep=2.5pt] at (3.38,\y) {\lab};}
+
+% VCC on the shared +5V riser that also feeds J2
+\draw[p5] (0.80,10.20) -- (0.50,10.20);
+\draw[p5] (0.50,15.90) -- (0.50,5.10);
+\draw[p5] (0.50,5.10) -- (0.80,5.10);
+
+% TRIG
+\draw[sig] (3.40,9.60) -- (6.70,9.60);
+\node[anchor=south, text=ink, netlab] at (4.55,9.66) {TRIG\_5V};
+
+% ECHO + 1k / 2k divider
+\draw[sig] (3.40,9.00) -- (4.00,9.00);
+\draw (4.00,9.00) to[R] (5.00,9.00);
+\node[anchor=north west, text=ink, netlab] at (3.44,8.94) {ECHO\_RAW\_5V};
+\node[anchor=south, text=ink, netlab] at (4.55,9.06) {$R_1$ = 1\,k$\Omega$};
+\draw[sig] (5.00,9.00) -- (5.55,9.00);
+\fill[ink] (5.55,9.00) circle (1.7pt);
+\draw (5.55,9.00) to[R] (5.55,8.00);
+\node[anchor=east, text=ink, netlab] at (5.30,8.45) {$R_2$ = 2\,k$\Omega$};
+\node[ground] at (5.55,8.00) {};
+\draw[sig] (5.55,9.00) -- (6.70,9.00);
+\node[anchor=south west, text=ok, netlab] at (5.62,9.10) {ECHO\_3V3};
+
+% GND
+\draw[gnd] (3.40,8.40) -- (3.70,8.40) -- (3.70,8.15);
+\node[ground] at (3.70,8.15) {};
+
+% =========================================================================
+% Bulk capacitor across the servo supply
+% =========================================================================
+\draw (6.20,15.90) to[C] (6.20,14.90);
+\node[ground] at (6.20,14.90) {};
+\node[anchor=south, text=crit, netlab, align=center] at (6.20,16.02)
+  {$C_1$ = 470--1000\,$\mu$F\\bulk, near servo};
+
+% =========================================================================
+% J2 — optional external 5 V supply
+% =========================================================================
+\draw[opt, rounded corners=3pt] (0.80,3.50) rectangle (3.90,6.40);
+\node[anchor=north, font=\sffamily\bfseries\small, text=muted] at (2.35,6.32)
+  {J2 \;\textemdash\; external 5 V};
+\node[anchor=north, align=center, font=\sffamily\footnotesize, text=ink] at (2.35,6.00)
+  {optional PSU for a\\stable servo rail};
+\node[anchor=west, text=crit, font=\sffamily\footnotesize] at (1.00,5.20) {+5V};
+\node[anchor=west, text=navy, font=\sffamily\footnotesize] at (1.00,4.20) {GND};
+\draw[opt] (1.72,4.20) -- (3.90,4.20);
+% ground tie to the ESP32 ground (common GND)
+\draw[opt] (3.90,4.20) -- (4.80,4.20) -- (4.80,7.10) -- (7.60,7.10) -- (7.60,7.44);
+\node[anchor=south west, text=muted, font=\sffamily\footnotesize, inner sep=1.5pt]
+  at (4.95,7.14) {common GND (tie)};
+
+% =========================================================================
+% 3.3 V side — DS3231 and LCD1602 / PCF8574
+% =========================================================================
+\draw[mod3] (11.00,11.80) rectangle (15.20,14.80);
+\node[anchor=north, font=\sffamily\bfseries\small, text=accent] at (13.30,14.72) {DS3231 RTC};
+\node[anchor=north, align=center, font=\sffamily\footnotesize, text=ink] at (13.30,14.40)
+  {I\textsuperscript{2}C 0x68\\CR2032 backup};
+\foreach \y/\lab in {14.20/VCC, 13.60/SDA, 13.00/SCL, 12.40/GND}{
+  \node[pin] at (11.00,\y) {};
+  \node[anchor=west, text=ink, font=\sffamily\footnotesize, inner sep=2.5pt] at (11.02,\y) {\lab};}
+
+\draw[mod3] (11.00,6.60) rectangle (15.20,9.60);
+\node[anchor=north, font=\sffamily\bfseries\small, text=accent] at (13.30,9.52) {LCD1602 + PCF8574};
+\node[anchor=north, align=center, font=\sffamily\footnotesize, text=ink] at (13.30,9.20)
+  {I\textsuperscript{2}C 0x27 (alt.\ 0x3F)\\16$\times$2, 3.3 V};
+\foreach \y/\lab in {9.00/VCC, 8.40/SDA, 7.80/SCL, 7.20/GND}{
+  \node[pin] at (11.00,\y) {};
+  \node[anchor=west, text=ink, font=\sffamily\footnotesize, inner sep=2.5pt] at (11.02,\y) {\lab};}
+
+% +3V3 riser feeding both modules
+\draw[p33] (9.70,15.90) -- (9.70,9.00);
+\draw[p33] (9.70,14.20) -- (11.00,14.20);
+\draw[p33] (9.70,9.00) -- (11.00,9.00);
+
+% I2C bus (SDA outer, SCL inner)
+\draw[iic] (9.50,12.50) -- (10.00,12.50) -- (10.00,13.60) -- (11.00,13.60);
+\draw[iic] (9.50,11.90) -- (10.20,11.90) -- (10.20,13.00) -- (11.00,13.00);
+\draw[iic] (10.00,12.50) -- (10.00,8.40) -- (11.00,8.40);
+\draw[iic] (10.20,11.90) -- (10.20,7.80) -- (11.00,7.80);
+\node[anchor=west, align=left, text=ok, font=\sffamily\footnotesize, inner sep=1.5pt]
+  at (11.05,10.70) {I\textsuperscript{2}C bus, 100 kHz\\SDA = GPIO21, SCL = GPIO22\\pull-ups are on the modules};
+
+% module grounds
+\draw[gnd] (11.00,12.40) -- (10.75,12.40) -- (10.75,12.15);
+\node[ground, scale=0.9] at (10.75,12.15) {};
+\draw[gnd] (11.00,7.20) -- (10.75,7.20) -- (10.75,6.95);
+\node[ground, scale=0.9] at (10.75,6.95) {};
+
+% =========================================================================
+% Legend
+% =========================================================================
+\draw[draw=muted!70, rounded corners=3pt, fill=white] (10.90,2.05) rectangle (15.60,5.50);
+\node[anchor=north west, font=\sffamily\bfseries\small, text=muted] at (11.05,5.40) {LEGEND};
+
+\foreach \yy/\st/\lab in {%
+  4.92/p5/{+5 V net},
+  4.54/p33/{+3.3 V net},
+  4.16/gnd/{GND net},
+  3.78/iic/{I\textsuperscript{2}C bus (SDA / SCL)},
+  3.40/opt/{optional part}}={
+  \draw[\st] (11.10,\yy) -- (11.85,\yy);
+  \node[anchor=west, font=\sffamily\footnotesize, inner sep=1.5pt] at (11.95,\yy) {\lab};
+}
+\draw[draw=ink, line width=0.8pt, fill=white] (11.28,2.94) rectangle (11.67,3.12);
+\draw[draw=ink, line width=0.8pt] (11.10,3.03) -- (11.28,3.03);
+\draw[draw=ink, line width=0.8pt] (11.67,3.03) -- (11.85,3.03);
+\node[anchor=west, font=\sffamily\footnotesize, inner sep=1.5pt] at (11.95,3.03)
+  {resistor divider 1 k$\Omega$ / 2 k$\Omega$};
+\node[ground, scale=0.7] at (11.45,2.62) {};
+\node[anchor=west, font=\sffamily\footnotesize, inner sep=1.5pt] at (11.95,2.62)
+  {GND, common to both domains};
+\node[anchor=west, font=\sffamily\footnotesize, text=muted, inner sep=1.5pt] at (11.05,2.28)
+  {no dot at a crossing = not connected};
+
+\end{tikzpicture}
+\end{document}

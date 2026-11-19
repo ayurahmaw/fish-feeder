@@ -1,0 +1,169 @@
+% Website software block diagram — single Python process, four threads
+% Source: dashboard/runtime.py (Runtime, _start_sweeper), mqtt.py (Worker),
+% commands.py (send_command: DB rows then publish), config (30 s / 45 s / 10 s).
+\documentclass[border=8pt]{standalone}
+\usepackage{xcolor}          % \definecolor must exist before colors.tex is read
+\input{preamble/colors}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,fit,backgrounds,calc,decorations.pathreplacing,patterns}
+\begin{document}
+\sffamily\small
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  >=Stealth,
+  proc/.style={draw=navy, line width=1.2pt, fill=canvas, rounded corners=6pt},
+  tbox/.style={draw=accent!70, line width=0.8pt, fill=white, rounded corners=3pt},
+  lay/.style ={draw=ink, line width=0.7pt, fill=white, rounded corners=2pt, align=center,
+               font=\sffamily\footnotesize, inner sep=2.5pt, text width=4.90cm},
+  l1/.style  ={lay, fill=accentLight, draw=accent},
+  l2/.style  ={lay, fill=accentLight, draw=accent},
+  l3/.style  ={lay, fill=white, draw=accent},
+  l4/.style  ={lay, fill=warnBg, draw=warn},
+  l5/.style  ={lay, fill=white, draw=warn},
+  txt/.style ={align=center, font=\sffamily\footnotesize, inner sep=1pt},
+  dbx/.style ={draw=navy, line width=0.9pt, fill=codeBg, rounded corners=2pt, align=center,
+               font=\sffamily\footnotesize, inner sep=3pt, text width=4.90cm},
+  ext/.style ={draw=muted, line width=0.9pt, fill=white, rounded corners=3pt, align=center,
+               font=\sffamily\footnotesize, inner sep=3pt, text width=3.70cm},
+  note/.style={draw=muted!70, line width=0.6pt, fill=white, rounded corners=3pt, align=left,
+               font=\sffamily\footnotesize, inner sep=4pt},
+  flow/.style={-{Stealth[length=1.8mm]}, draw=ink, line width=0.8pt},
+  mq/.style  ={<->, draw=ok, line width=1.0pt},
+  dep/.style ={-{Stealth[length=1.6mm]}, draw=muted, line width=0.7pt, densely dotted},
+]
+
+% =========================================================================
+% Process boundary
+% =========================================================================
+\filldraw[proc] (0.30,2.60) rectangle (10.85,16.20);
+\node[anchor=north west, font=\sffamily\bfseries\small, text=navy] at (0.50,16.12)
+  {single Python process \textemdash{} \texttt{run.py}};
+\node[anchor=north west, font=\sffamily\footnotesize, text=muted] at (0.50,15.90)
+  {one process, four threads, one SQLite file};
+
+% =========================================================================
+% Main thread (Streamlit) — module layering
+% =========================================================================
+\draw[draw=accent!70, line width=0.8pt, fill=white, fill opacity=0.5, rounded corners=3pt]
+  (0.55,7.55) rectangle (6.45,15.52);
+\node[anchor=north west, font=\sffamily\bfseries\footnotesize, text=accent] at (0.68,15.44)
+  {main thread \textemdash{} Streamlit};
+
+\node[l1, minimum height=1.15cm] (app) at (3.50,14.55)
+  {\textbf{\texttt{app.py}}\\ navigation, sidebar, topbar};
+\node[l2, minimum height=1.25cm] (pages) at (3.50,13.10)
+  {\textbf{\texttt{app\_pages/*}} \ (6 pages)\\ status \textperiodcentered\ live
+   \textperiodcentered\ alerts\\ history \textperiodcentered\ schedules
+   \textperiodcentered\ control};
+\node[l3, minimum height=1.40cm] (acts) at (3.50,11.60)
+  {\textbf{\texttt{actions.py}} \textperiodcentered\ \textbf{\texttt{data.py}}\\
+   \textbf{\texttt{ui.py}} \textperiodcentered\ \textbf{\texttt{i18n.py}}\\
+   actions, queries, widgets, i18n};
+\node[l4, minimum height=1.55cm] (cmd) at (3.50,10.00)
+  {\textbf{\texttt{commands.py}} + \textbf{\texttt{handlers.py}}\\
+   \texttt{send\_command}: rows first, then publish;\\
+   \texttt{handlers}: ack, telemetry, status, state};
+\node[l5, minimum height=1.20cm] (dbc) at (3.50,8.35)
+  {\textbf{\texttt{db.py}}\\ SQL helpers, transactions, sweeps};
+
+\foreach \a/\b in {app/pages, pages/acts, acts/cmd, cmd/dbc}{
+  \draw[flow] (\a.south) -- (\b.north);}
+
+% =========================================================================
+% SQLite file
+% =========================================================================
+\node[dbx, minimum height=1.35cm] (sqlite) at (3.50,6.05)
+  {\textbf{SQLite \texttt{feeder.db}} \ (WAL)\\
+   6 tables \textperiodcentered\ 1 view \textperiodcentered\ 6 explicit indexes\\
+   no server: one file at \texttt{dashboard/feeder.db}};
+
+\draw[{Stealth[length=1.6mm]}-, draw=crit, line width=1.0pt] (2.55,7.72) -- (2.55,6.75);
+\node[anchor=east, text=crit, font=\sffamily\footnotesize, align=right, text width=1.7cm]
+  at (2.42,7.24) {\textbf{write}\\ \texttt{BEGIN IMMEDIATE}};
+\draw[-{Stealth[length=1.6mm]}, draw=ok, line width=1.0pt] (4.55,6.75) -- (4.55,7.72);
+\node[anchor=west, text=ok, font=\sffamily\footnotesize, align=left, text width=1.7cm]
+  at (4.68,7.24) {\textbf{read}\\ \texttt{cache\_data}\\ ttl 2\,s};
+
+% =========================================================================
+% Other threads (deterministic boxes + centred text)
+% =========================================================================
+\draw[tbox] (6.75,13.60) rectangle (10.60,15.30);
+\node[txt, text width=3.55cm] at (8.67,14.45)
+  {\textbf{\texttt{amqtt-broker}} (daemon)\\ asyncio loop, spawns the embedded broker};
+
+\draw[tbox] (6.75,9.15) rectangle (10.60,13.20);
+\node[txt, text width=3.55cm] at (8.67,11.17)
+  {\textbf{paho network thread}\\[3pt]
+   \texttt{loop\_start()}, keepalive 60\,s\\
+   client id \texttt{feeder-dashboard}\\[3pt]
+   \textbf{in}: \texttt{+/telemetry}, \texttt{+/ack},\\
+   \texttt{+/status}, \texttt{+/state}\\[3pt]
+   \textbf{out}: \texttt{<device>/command},\\
+   QoS 1};
+
+\draw[tbox] (6.75,5.10) rectangle (10.60,8.75);
+\node[txt, text width=3.55cm] at (8.67,6.92)
+  {\textbf{\texttt{timeout-sweeper}}\\ every 10\,s\\[4pt]
+   \textbf{1}\ \ command sent, no ack for 30\,s\\
+   $\rightarrow$ status \texttt{timeout}\\[3pt]
+   \textbf{2}\ \ device silent for 45\,s\\
+   $\rightarrow$ \texttt{is\_online = 0}};
+
+\draw[mq] (8.67,13.20) -- (8.67,13.60);
+\node[anchor=west, text=ok, font=\sffamily\footnotesize, inner sep=1pt] at (8.76,13.40) {:1883};
+
+% paho <-> module stack (in and out on the same hop)
+\draw[mq] (6.75,10.00) -- (6.47,10.00);
+
+% sweeper queries db.py
+\draw[dep] (6.75,8.35) -- (6.47,8.35);
+
+% singleton note
+\node[note, anchor=north west, text width=5.4cm] at (0.62,4.85)
+  {\texttt{runtime.get\_runtime()} is a module-level singleton, not
+   \texttt{st.cache\_resource}: the broker is reachable before the first browser
+   session runs \texttt{app.py}. The sweeper and the paho callbacks share the same
+   \texttt{feeder.db} through \texttt{db.py}.};
+
+% =========================================================================
+% Broker and clients outside the process
+% =========================================================================
+\node[ext, minimum height=3.30cm] (broker) at (13.15,11.40)
+  {\textbf{MQTT broker}\\[2pt] \texttt{0.0.0.0:1883}, anonymous\\[3pt]
+   embedded amqtt,\\ an already running broker,\\ or an external one};
+\node[ext, minimum height=0.90cm] (esp) at (13.15,15.30)
+  {ESP32 feeder \ \textperiodcentered\ \ \texttt{sim.js}};
+
+\draw[mq] (10.60,11.10) -- (11.30,11.10);
+\node[anchor=north, text=ok, font=\sffamily\footnotesize, inner sep=1pt] at (10.95,11.04)
+  {MQTT};
+\draw[mq] (13.15,13.05) -- (13.15,14.85);
+\node[anchor=west, text=ok, font=\sffamily\footnotesize, inner sep=1pt] at (13.25,13.95)
+  {TCP 1883};
+\draw[dep] (10.60,14.45) -- (11.30,14.45);
+\node[anchor=south, text=muted, font=\sffamily\footnotesize, inner sep=1pt, rotate=90] at (11.02,14.30)
+  {owns};
+
+% =========================================================================
+% Topics and broker modes
+% =========================================================================
+\node[note, anchor=north west, text width=3.55cm] (topics) at (11.30,9.55)
+  {\textbf{MQTT topics}\\[2pt]
+   \texttt{feeder-ayurahmaw/}\\
+   \texttt{\ \ <device>/telemetry}\\
+   \texttt{\ \ <device>/ack}\\
+   \texttt{\ \ <device>/status}\\
+   \texttt{\ \ \ \ (retained)}\\
+   \texttt{\ \ <device>/state}\\[3pt]
+   dashboard $\rightarrow$ device:\\
+   \texttt{\ \ <device>/command}\\
+   \texttt{\ \ \ \ (QoS 1)}};
+
+\node[note, anchor=north west, text width=3.55cm] at (11.30,5.55)
+  {\textbf{broker mode}\\[2pt]
+   \texttt{embedded} \textendash\ port free,\\ broker runs in-process\\
+   \texttt{existing} \textendash\ 1883 busy,\\ reuse that broker\\
+   \texttt{external} \textendash\\ \texttt{EMBED\_BROKER=false}};
+
+\end{tikzpicture}
+\end{document}

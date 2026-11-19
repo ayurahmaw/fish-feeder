@@ -1,0 +1,171 @@
+% Pin map — DOIT ESP32 DevKit V1, 30-pin header
+% Pin order as documented for the 30-pin DOIT board; used pins per FACTS.md.
+\documentclass[border=8pt]{standalone}
+\usepackage{xcolor}          % \definecolor must exist before colors.tex is read
+\input{preamble/colors}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,fit,backgrounds,calc,decorations.pathreplacing,patterns}
+\begin{document}
+\sffamily\small
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  >=Stealth,
+  pinlead/.style={draw=ink, line width=0.6pt},
+  % pin label styles
+  plain/.style={anchor=east, text=ink,    inner sep=2pt},
+  used/.style ={anchor=east, text=accent, font=\sffamily\bfseries\small,
+                fill=accentLight, rounded corners=2pt, inner sep=2.2pt},
+  usedp/.style={anchor=east, text=crit,   font=\sffamily\bfseries\small,
+                fill=accentLight, rounded corners=2pt, inner sep=2.2pt},
+  usedg/.style={anchor=east, text=navy,   font=\sffamily\bfseries\small,
+                fill=accentLight, rounded corners=2pt, inner sep=2.2pt},
+  strap/.style={anchor=east, text=warn,   fill=warnBg, rounded corners=2pt, inner sep=2.2pt},
+  uart/.style ={anchor=east, text=muted,  fill=codeBg, rounded corners=2pt, inner sep=2.2pt},
+  inp/.style  ={anchor=east, text=muted,  draw=muted!70, densely dotted,
+                rounded corners=2pt, inner sep=2pt},
+]
+% mirrored styles for the right-hand side
+\tikzset{
+  rplain/.style={plain, anchor=west},
+  rused/.style ={used, anchor=west},
+  rusedp/.style={usedp, anchor=west},
+  rusedg/.style={usedg, anchor=west},
+  rstrap/.style={strap, anchor=west},
+  ruart/.style ={uart, anchor=west},
+  rinp/.style  ={inp, anchor=west},
+}
+
+% keep the canvas tidy regardless of label overhang
+\useasboundingbox (0.50,-0.02) rectangle (15.95,16.78);
+
+% =========================================================================
+% Board outline
+% =========================================================================
+% antenna
+\filldraw[fill=white, draw=navy, line width=0.8pt] (5.95,15.20) rectangle (7.95,16.20);
+\fill[pattern=north east lines, pattern color=navy!70] (6.05,15.30) rectangle (7.85,16.10);
+\node[anchor=south, text=navy, font=\sffamily\footnotesize] at (6.95,16.24) {PCB antenna};
+
+% board body
+\filldraw[fill=codeBg, draw=navy, line width=1.1pt, rounded corners=2pt]
+  (5.70,2.90) rectangle (8.20,15.20);
+\node[anchor=center, text=ink, font=\sffamily\bfseries\small] at (6.95,12.10) {ESP32};
+\node[anchor=center, text=ink, font=\sffamily\bfseries\small] at (6.95,11.70) {WROOM-32};
+
+% USB connector at the bottom
+\filldraw[fill=white, draw=ink, line width=0.8pt] (6.20,1.80) rectangle (7.70,2.90);
+\node[anchor=west, text=ink, font=\sffamily\footnotesize, align=left] at (7.85,2.35)
+  {micro-USB\\5 V in};
+
+\node[anchor=south, font=\sffamily\bfseries\small, text=navy] at (6.95,16.60)
+  {DOIT ESP32 DevKit V1 --- 30-pin header};
+
+% =========================================================================
+% LEFT column  (pins 1..15)
+% =========================================================================
+\foreach \y/\n/\lab/\sty in {%
+ 14.500/1/EN/plain,
+ 13.714/2/{VP (36)}/inp,
+ 12.929/3/{VN (39)}/inp,
+ 12.143/4/D34/inp,
+ 11.357/5/D35/inp,
+ 10.571/6/D32/plain,
+  9.786/7/D33/plain,
+  9.000/8/D25/plain,
+  8.214/9/D26/plain,
+  7.429/10/D27/plain,
+  6.643/11/D14/plain,
+  5.857/12/D12/strap,
+  5.071/13/D13/used,
+  4.286/14/GND/usedg,
+  3.500/15/VIN/usedp}{%
+  \draw[pinlead] (5.70,\y) -- (5.15,\y);
+  \node[\sty] at (5.10,\y) {\lab};
+  \node[anchor=west, text=muted, font=\sffamily\footnotesize, inner sep=0pt] at (5.78,\y) {\n};}
+
+% =========================================================================
+% RIGHT column  (pins 16..30)
+% =========================================================================
+\foreach \y/\n/\lab/\sty in {%
+ 14.500/16/D23/rplain,
+ 13.714/17/D22/rused,
+ 12.929/18/{TX0 (1)}/ruart,
+ 12.143/19/{RX0 (3)}/ruart,
+ 11.357/20/D21/rused,
+ 10.571/21/GND/rusedg,
+  9.786/22/D19/rplain,
+  9.000/23/D18/rused,
+  8.214/24/D5/rused,
+  7.429/25/{TX2 (17)}/rplain,
+  6.643/26/{RX2 (16)}/rplain,
+  5.857/27/D4/rplain,
+  5.071/28/D2/rstrap,
+  4.286/29/D15/rstrap,
+  3.500/30/3V3/rusedp}{%
+  \draw[pinlead] (8.20,\y) -- (8.75,\y);
+  \node[\sty] at (8.80,\y) {\lab};
+  \node[anchor=east, text=muted, font=\sffamily\footnotesize, inner sep=0pt] at (8.12,\y) {\n};}
+
+% =========================================================================
+% Legend
+% =========================================================================
+\filldraw[fill=white, draw=muted!70, rounded corners=3pt] (11.20,9.40) rectangle (15.90,15.20);
+\node[anchor=north west, font=\sffamily\bfseries\small, text=muted] at (11.35,15.10) {LEGEND};
+
+\node[used,  anchor=west] at (11.40,14.55) {D13};
+\node[anchor=west, font=\sffamily\footnotesize] at (12.50,14.55) {used in this design};
+\node[usedp, anchor=west] at (11.40,14.05) {VIN};
+\node[anchor=west, font=\sffamily\footnotesize] at (12.50,14.05) {power (+5 V, +3.3 V)};
+\node[usedg, anchor=west] at (11.40,13.55) {GND};
+\node[anchor=west, font=\sffamily\footnotesize] at (12.50,13.55) {ground};
+\node[strap, anchor=west] at (11.40,13.05) {D12};
+\node[anchor=west, font=\sffamily\footnotesize] at (12.50,13.05) {strapping pin, avoid};
+\node[uart,  anchor=west] at (11.40,12.55) {TX0};
+\node[anchor=west, font=\sffamily\footnotesize] at (12.50,12.55) {UART0 to CH340, avoid};
+\node[inp,   anchor=west] at (11.40,12.05) {D34};
+\node[anchor=west, font=\sffamily\footnotesize] at (12.50,12.05) {input only (34--39)};
+\node[plain, anchor=west] at (11.40,11.55) {D25};
+\node[anchor=west, font=\sffamily\footnotesize] at (12.50,11.55) {free / not used};
+\node[anchor=west, font=\sffamily\footnotesize, text=muted] at (11.35,10.95)
+  {1--30 = physical header order};
+\node[anchor=west, font=\sffamily\footnotesize, text=muted] at (11.35,10.55)
+  {EN = reset, pulled up on board};
+\node[anchor=west, font=\sffamily\footnotesize, text=muted] at (11.35,10.15)
+  {both GND pins are the same net};
+
+% =========================================================================
+% Used-pin map
+% =========================================================================
+\filldraw[fill=white, draw=accent!60, rounded corners=3pt] (11.20,4.35) rectangle (15.90,9.10);
+\node[anchor=north west, font=\sffamily\bfseries\small, text=accent] at (11.35,9.00)
+  {USED IN THIS DESIGN};
+\foreach \y/\a/\b in {%
+ 8.45/D13/{servo PWM, 50 Hz},
+ 8.00/D5/{HC-SR04 TRIG},
+ 7.55/D18/{HC-SR04 ECHO 1k/2k},
+ 7.10/D21/{I\textsuperscript{2}C SDA},
+ 6.65/D22/{I\textsuperscript{2}C SCL},
+ 6.20/{GND $\times$2}/{common ground},
+ 5.75/VIN/{5 V rail in},
+ 5.30/3V3/{3.3 V rail out}}{%
+  \node[anchor=west, font=\sffamily\bfseries\footnotesize, text=accent, inner sep=1pt]
+    at (11.35,\y) {\a};
+  \node[anchor=west, font=\sffamily\footnotesize, text=ink, inner sep=1pt]
+    at (12.80,\y) {\b};}
+\node[anchor=west, font=\sffamily\footnotesize, text=muted]
+  at (11.40,4.70) {0x68 (RTC), 0x27 / 0x3F (LCD)};
+
+% =========================================================================
+% Forbidden-pin notes
+% =========================================================================
+\filldraw[fill=critBg, draw=crit!55, rounded corners=3pt] (0.60,0.05) rectangle (15.90,1.62);
+\node[anchor=north west, font=\sffamily\bfseries\small, text=crit] at (0.75,1.52)
+  {PINS TO AVOID};
+\node[anchor=north west, font=\sffamily\footnotesize, text=ink, align=left] at (3.75,1.50)
+  {\textbf{GPIO 6--11}: flash SPI -- not broken out on the 30-pin header\\
+   \textbf{GPIO 1 / 3 (TX0 / RX0)}: UART0 to the CH340 USB bridge\\
+   \textbf{GPIO 0 / 2 / 12 / 15}: boot strapping (GPIO2 = on-board LED)\\
+   \textbf{GPIO 20 / 24 / 28--31}: not present on the WROOM-32 module};
+
+\end{tikzpicture}
+\end{document}
