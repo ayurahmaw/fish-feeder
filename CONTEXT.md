@@ -482,7 +482,7 @@ Gabungan device + telemetry terbaru (window function `ROW_NUMBER`) + flag status
 - `is_low` — 1 jika 0 < persen ≤ `low_feed_threshold_pct` (pakan menipis)
 
 ### 11.4 Seed Data Awal
-- Device `feeder01` — "Feeder Kolam 1", kalibrasi `full=5 cm`, `empty=25 cm`, threshold 20%
+- Device `feeder01` — "Feeder Kolam 1", kalibrasi `full=3 cm`, `empty=17 cm`, threshold 20%
 - 2 jadwal contoh: **Pakan Pagi 07:00** (2 porsi), **Pakan Sore 17:00** (2 porsi)
 
 ### 11.5 Alur Integrasi Aplikasi (MQTT → DB)
@@ -1267,7 +1267,7 @@ Catatan: `-F` mendukung `%I %U %t %p %j %q %r %l` (bukan `%H/%M/%S`); `-R` melew
 | Kegiatan | Perintah |
 |---|---|
 | Ubah threshold alert | `sqlite3 dashboard/feeder.db "UPDATE devices SET low_feed_threshold_pct = 25 WHERE device_code = 'feeder01';"` |
-| Kalibrasi sensor | `sqlite3 dashboard/feeder.db "UPDATE devices SET sensor_full_cm = 5.00, sensor_empty_cm = 30.00 WHERE device_code = 'feeder01';"` |
+| Kalibrasi sensor | `sqlite3 dashboard/feeder.db "UPDATE devices SET sensor_full_cm = 4.00, sensor_empty_cm = 20.00 WHERE device_code = 'feeder01';"` |
 | Tambah jadwal | `sqlite3 dashboard/feeder.db "INSERT INTO schedules (device_id, name, feed_time, portions) SELECT id, 'Pakan Malam', '21:00:00', 1 FROM devices WHERE device_code = 'feeder01';"` |
 | Ubah port / broker eksternal | `dashboard/.env` → `EMBED_BROKER`, `BROKER_BIND`, `MQTT_URL` |
 

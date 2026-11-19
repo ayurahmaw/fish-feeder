@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import config
+from log import log
 
 # Milliseconds-precision "now", matching the DATETIME(3) semantics of the old
 # MySQL schema. Stored as TEXT so the sqlite3 CLI output stays readable.
@@ -116,8 +117,24 @@ def init_db() -> None:
                 "ALTER TABLE devices "
                 "ADD COLUMN timezone TEXT NOT NULL DEFAULT 'Asia/Jakarta'"
             )
+        _migrate_hopper_calibration(conn)
         _migrate_command_types(conn)
         _initialized = True
+
+
+def _migrate_hopper_calibration(conn) -> None:
+    """Align the legacy 5/25 cm calibration with the firmware's 3/17 cm.
+
+    Only rows still sitting exactly on the old column defaults are touched, so a
+    calibration that was already set by hand is never overwritten. Idempotent.
+    """
+    cur = conn.execute(
+        "UPDATE devices SET sensor_full_cm = 3.00, sensor_empty_cm = 17.00, "
+        "updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now') "
+        "WHERE sensor_full_cm = 5.00 AND sensor_empty_cm = 25.00"
+    )
+    if cur.rowcount:
+        log(f"migrasi kalibrasi: {cur.rowcount} device 5/25 cm -> 3/17 cm")
 
 
 def _migrate_command_types(conn) -> None:

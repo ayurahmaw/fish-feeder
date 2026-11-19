@@ -84,7 +84,7 @@ MAC, e.g. MAC `20:43:a8:64:00:8c` → device id **`feeder-64008c`**, topics
 get different ids automatically; it survives reflashing, and the dashboard device picker shows it.
 
 The boot log prints it as `[id] device=…`. The platform auto-creates the matching `devices` row on
-first contact (`db.ensure_device`), with the default calibration 5/25 cm and threshold 20 %.
+first contact (`db.ensure_device`), with the default calibration 3/17 cm and threshold 20 %.
 
 If you want to keep an existing device row (its history, schedules and calibration), rename the
 row instead of letting a second one appear — `device_id` foreign keys are untouched:
@@ -96,12 +96,12 @@ sqlite3 dashboard/feeder.db \
 
 Set `DEVICE_ID_OVERRIDE` to a literal (e.g. `"feeder01"`) to pin the old behaviour.
 
-Keep `HOPPER_FULL_CM` / `HOPPER_EMPTY_CM` in sync with the `devices` row (seed values are 5.0 and
-25.0 cm). The dashboard can also be updated to match:
+Keep `HOPPER_FULL_CM` / `HOPPER_EMPTY_CM` in sync with the `devices` row (both ship as 3.0 and
+17.0 cm). The dashboard can also be updated to match:
 
 ```bash
 sqlite3 dashboard/feeder.db \
-  "UPDATE devices SET sensor_full_cm = 5.0, sensor_empty_cm = 25.0 WHERE device_code = '<device-id>';"
+  "UPDATE devices SET sensor_full_cm = 3.0, sensor_empty_cm = 17.0 WHERE device_code = '<device-id>';"
 ```
 
 ## Flash

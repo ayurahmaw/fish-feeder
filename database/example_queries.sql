@@ -6,7 +6,7 @@
 -- ============================================================================
 
 -- Device contoh 'feeder01' sudah di-seed oleh schema.sql.
--- Kalibrasi: full = 5 cm, empty = 25 cm, threshold = 20%.
+-- Kalibrasi: full = 3 cm, empty = 17 cm, threshold = 20%.
 
 -- ============================================================================
 -- Fitur 1: Persentase sisa pakan
@@ -14,10 +14,10 @@
 SELECT device_code, name, feed_level_pct, distance_cm, is_low, is_empty, measured_at
 FROM v_device_status;
 
--- Contoh telemetry uji (jarak 10 cm -> 75%):
---   pct = (25 - 10) / (25 - 5) * 100 = 75
+-- Contoh telemetry uji (jarak 10 cm -> 50%):
+--   pct = (17 - 10) / (17 - 3) * 100 = 50
 INSERT INTO telemetry (device_id, distance_cm, feed_level_pct, state)
-SELECT d.id, 10.00, 75.00, 'idle'
+SELECT d.id, 10.00, 50.00, 'idle'
 FROM devices d
 WHERE d.device_code = 'feeder01';
 

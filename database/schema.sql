@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS devices (
   name                   TEXT    NOT NULL,         -- nama tampilan
   location               TEXT,                     -- lokasi penempatan
   timezone               TEXT    NOT NULL DEFAULT 'Asia/Jakarta',  -- zona IANA untuk sinkron RTC
-  sensor_full_cm         REAL    NOT NULL DEFAULT 5.00,   -- jarak sensor saat hopper PENUH (kalibrasi)
-  sensor_empty_cm        REAL    NOT NULL DEFAULT 25.00,  -- jarak sensor saat hopper KOSONG (kalibrasi)
+  sensor_full_cm         REAL    NOT NULL DEFAULT 3.00,   -- jarak sensor saat hopper PENUH (kalibrasi)
+  sensor_empty_cm        REAL    NOT NULL DEFAULT 17.00,  -- jarak sensor saat hopper KOSONG (kalibrasi)
   low_feed_threshold_pct INTEGER NOT NULL DEFAULT 20
                                  CHECK (low_feed_threshold_pct BETWEEN 0 AND 100),
   is_online              INTEGER NOT NULL DEFAULT 0 CHECK (is_online IN (0, 1)),
@@ -189,7 +189,7 @@ LEFT JOIN latest l ON l.device_id = d.id AND l.rn = 1;
 INSERT OR IGNORE INTO devices
   (device_code, name, location, sensor_full_cm, sensor_empty_cm, low_feed_threshold_pct)
 VALUES
-  ('feeder01', 'Feeder Kolam 1', 'Kolam utama', 5.00, 25.00, 20);
+  ('feeder01', 'Feeder Kolam 1', 'Kolam utama', 3.00, 17.00, 20);
 
 INSERT INTO schedules (device_id, name, feed_time, portions, is_active)
 SELECT d.id, 'Pakan Pagi', '07:00:00', 2, 1
