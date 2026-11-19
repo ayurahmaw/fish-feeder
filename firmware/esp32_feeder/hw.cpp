@@ -27,6 +27,7 @@ uint32_t ramBaseMs = 0;
 
 uint8_t page = 0;
 uint32_t pageAt = 0;
+uint32_t splashUntil = 0;
 
 int64_t daysFromCivil(int y, unsigned m, unsigned d) {
   y -= m <= 2;
@@ -293,36 +294,68 @@ void displaySplash(const char *line1, const char *line2) {
   drawLine(1, line2);
 }
 
+void displaySplashHold(const char *line1, const char *line2, uint32_t nowMs, uint32_t holdMs) {
+  displaySplash(line1, line2);
+  splashUntil = nowMs + holdMs;
+}
+
+static String clockLine() {
+  if (!clockValid()) {
+    return "jam belum di-set";
+  }
+  const String time = clockTime();
+  return clockDate() + " " + time.substring(0, 5) + " " + DISPLAY_TZ;
+}
+
+static const char *errorName(const DisplayData &data) {
+  if (data.distanceCm < 0) {
+    return "Sensor";
+  }
+  if (!servoReady()) {
+    return "Servo";
+  }
+  if (!data.wifiOk) {
+    return "WiFi";
+  }
+  if (!data.mqttOk) {
+    return "MQTT";
+  }
+  if (!data.clockValid) {
+    return "RTC";
+  }
+  return nullptr;
+}
+
 void displayTick(const DisplayData &data, uint32_t nowMs) {
   if (!lcdReady) {
     return;
   }
-  if (nowMs - pageAt >= DISPLAY_PAGE_MS) {
-    page = (page + 1) % 2;
-    pageAt = nowMs;
+
+  if (splashUntil != 0) {
+    if (nowMs < splashUntil) {
+      return;
+    }
+    splashUntil = 0;
   }
 
+  const char *error = errorName(data);
   String first;
-  String second;
-
-  if (page == 0) {
-    first = "Pakan ";
-    first += data.feedPct >= 0 ? String(data.feedPct) + "%" : String("--");
-    first += "  ";
-    first += data.distanceCm >= 0 ? String(data.distanceCm, 1) + "cm" : String("---");
-
-    second = data.state != nullptr ? data.state : "?";
-    second += "  ";
-    second += String(data.thresholdPct) + "%";
-    second += " s";
-    second += String(data.scheduleCount);
+  if (error != nullptr) {
+    // Alternate the clock with the active error so both stay visible.
+    if (nowMs - pageAt >= DISPLAY_PAGE_MS) {
+      page = (page + 1) % 2;
+      pageAt = nowMs;
+    }
+    first = page == 0 ? clockLine() : String("Error: ") + error;
   } else {
-    first = data.clockValid ? clockDate() + " " + clockTime() : String("jam belum di-set");
-    second = "WiFi:";
-    second += data.wifiOk ? "OK " : ".. ";
-    second += "MQTT:";
-    second += data.mqttOk ? "OK" : "..";
+    page = 0;
+    pageAt = nowMs;
+    first = clockLine();
   }
+
+  String second = "Sisa pakan:";
+  second += data.feedPct >= 0 ? String(data.feedPct) : String("--");
+  second += "%";
 
   drawLine(0, first);
   drawLine(1, second);

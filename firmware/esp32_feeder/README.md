@@ -135,6 +135,7 @@ deliver retained messages of other topics).
 | `type` | Behaviour | ack |
 |---|---|---|
 | `manual_feed` | queues `portions` (1–10) on the servo gate | after the last portion: `ok`, `error_busy`, `error_servo`, `error_low_level` |
+| `servo_test` | drives the gate to `payload.angle` (only `0` or `90`; a wiring/mechanics check, not gated by the hopper level) | `ok` / `error_bad_payload` / `error_busy` / `error_servo` |
 | `set_schedule` | stores up to 8 schedules in NVS, replaces the previous set | `ok` / `error_bad_payload` |
 | `set_threshold` | stores `threshold_pct` in NVS | `ok` / `error_bad_payload` |
 | `set_rtc` | local wall-clock `YYYY-MM-DDTHH:MM:SS` → DS3231 (falls back to a RAM clock) | `ok` |
@@ -147,6 +148,17 @@ Schedules run **on the device**: once the RTC is valid, each stored `feed_time` 
 first 60 seconds of its minute, at most once per calendar day (tracked in NVS), and is skipped when
 the hopper reads empty. A completed scheduled feed is reported on the `state` topic so the
 dashboard History tab records it as *Terjadwal*.
+
+## Time keeping
+
+- **Boot:** the DS3231 time is used immediately — serial prints `[rtc] waktu boot dari RTC: …`
+  and the LCD holds it for 3 s. Without a valid RTC the clock waits for NTP.
+- **WiFi connect:** SNTP asks `NTP_SERVER` (`pool.ntp.org`) for UTC. The result is shifted by
+  `NTP_UTC_OFFSET_SEC` (default WIB, UTC+7), written to the DS3231 as the backup clock, logged as
+  `[ntp] waktu tersinkron: … -> RTC`, and shown on the LCD for 4 s. It re-syncs on every reconnect.
+- **Fallback:** if NTP is unreachable the DS3231 (or the RAM clock when it is absent) keeps running,
+  so schedules and the dashboard still see time. `set_rtc` from the dashboard overrides until the
+  next NTP sync.
 
 ## Degraded mode
 

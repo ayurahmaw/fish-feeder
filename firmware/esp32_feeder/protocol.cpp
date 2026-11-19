@@ -129,6 +129,7 @@ void enqueue(const uint8_t *payload, unsigned int len) {
   copyText(cmd.type, sizeof(cmd.type), doc["type"] | "");
   cmd.portions = doc["payload"]["portions"] | 1;
   cmd.thresholdPct = doc["payload"]["threshold_pct"] | -1;
+  cmd.angle = doc["payload"]["angle"] | -1;
   copyText(cmd.datetime, sizeof(cmd.datetime), doc["payload"]["datetime"] | "");
 
   if (doc["payload"]["schedules"].is<JsonArray>()) {

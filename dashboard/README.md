@@ -58,6 +58,7 @@ saat halaman pertama kali dibuka.
 pipenv run python cli.py manual_feed feeder01 '{"portions":2}'
 pipenv run python cli.py get_state feeder01
 pipenv run python cli.py set_threshold feeder01 '{"threshold_pct":25}'
+pipenv run python cli.py servo_test feeder01 '{"angle":90}'   # 0 atau 90 derajat
 ```
 
 Aplikasi Streamlit harus sedang berjalan (dialah yang menjalankan broker dan
@@ -84,7 +85,7 @@ Yang penting:
 | **Notifikasi** | Ringkasan belum dibaca/peringatan/kritis, filter, tandai dibaca per item atau semua |
 | **Riwayat** | Riwayat pakan 7 hari terakhir, ringkasan sukses/gagal/porsi, filter status |
 | **Jadwal** | Tambah/ubah/hapus jadwal, aktif–nonaktif, status sinkronisasi mengikuti status device, kirim `set_schedule` |
-| **Kontrol** | `manual_feed` (dengan konfirmasi), `get_state`, `set_threshold`, `set_rtc`, log perintah |
+| **Kontrol** | `manual_feed` (dengan konfirmasi), `get_state`, `set_threshold`, `set_rtc`, tes servo `servo_test` (0°/90°), log perintah |
 
 Halaman Status dan Live menyegarkan diri tiap 2 detik (`st.fragment`); halaman
 lain diperbarui saat berinteraksi.

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS devices (
   device_code            TEXT    NOT NULL UNIQUE,  -- kode unik = bagian topik MQTT, mis. feeder01
   name                   TEXT    NOT NULL,         -- nama tampilan
   location               TEXT,                     -- lokasi penempatan
+  timezone               TEXT    NOT NULL DEFAULT 'Asia/Jakarta',  -- zona IANA untuk sinkron RTC
   sensor_full_cm         REAL    NOT NULL DEFAULT 5.00,   -- jarak sensor saat hopper PENUH (kalibrasi)
   sensor_empty_cm        REAL    NOT NULL DEFAULT 25.00,  -- jarak sensor saat hopper KOSONG (kalibrasi)
   low_feed_threshold_pct INTEGER NOT NULL DEFAULT 20
@@ -77,7 +78,7 @@ CREATE TABLE IF NOT EXISTS commands (
   command_id     TEXT    NOT NULL UNIQUE,  -- ID dari payload JSON, korelasi dengan ack
   device_id      INTEGER NOT NULL REFERENCES devices (id) ON DELETE CASCADE,
   type           TEXT    NOT NULL
-                 CHECK (type IN ('manual_feed', 'set_schedule', 'set_threshold', 'set_rtc', 'get_state')),
+                 CHECK (type IN ('manual_feed', 'set_schedule', 'set_threshold', 'set_rtc', 'get_state', 'servo_test')),
   payload        TEXT    NOT NULL CHECK (json_valid(payload)),
   status         TEXT    NOT NULL DEFAULT 'pending'
                  CHECK (status IN ('pending', 'sent', 'success', 'failed', 'timeout')),

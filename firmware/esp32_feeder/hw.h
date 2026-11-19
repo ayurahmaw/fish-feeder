@@ -5,13 +5,10 @@
 namespace hw {
 
 struct DisplayData {
-  const char *state;
   float distanceCm;  // < 0 when the reading is invalid
   int feedPct;       // < 0 when unknown
   bool wifiOk;
   bool mqttOk;
-  int thresholdPct;
-  int scheduleCount;
   bool clockValid;
 };
 
@@ -34,6 +31,8 @@ String clockDate();
 String clockTime();
 
 void displaySplash(const char *line1, const char *line2);
+// Same as displaySplash, but displayTick() leaves it on screen until nowMs + holdMs.
+void displaySplashHold(const char *line1, const char *line2, uint32_t nowMs, uint32_t holdMs);
 void displayTick(const DisplayData &data, uint32_t nowMs);
 
 }  // namespace hw

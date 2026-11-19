@@ -336,11 +336,35 @@ STRINGS: dict[str, dict[str, str]] = {
     "apply_threshold": {"id": "Terapkan ambang", "en": "Apply threshold"},
     "device_clock": {"id": "Jam perangkat", "en": "Device clock"},
     "device_clock_sub": {
-        "id": "Sinkronkan RTC agar jadwal tetap akurat.",
-        "en": "Sync the RTC so schedules remain accurate.",
+        "id": "Waktu diambil dari UTC lalu digeser sesuai zona waktu perangkat.",
+        "en": "Time is taken from UTC and shifted to the device's time zone.",
     },
-    "date": {"id": "Tanggal", "en": "Date"},
+    "timezone": {"id": "Zona waktu", "en": "Time zone"},
+    "timezone_hint": {
+        "id": "Nama zona IANA, mis. Asia/Jakarta, Asia/Makassar, Asia/Jayapura.",
+        "en": "IANA zone name, e.g. Asia/Jakarta, Asia/Makassar, Asia/Jayapura.",
+    },
+    "timezone_invalid": {
+        "id": "Zona waktu tidak dikenal: {tz}",
+        "en": "Unknown time zone: {tz}",
+    },
+    "timezone_saved": {
+        "id": "Zona waktu disimpan: {tz}",
+        "en": "Time zone saved: {tz}",
+    },
+    "device_time_preview": {
+        "id": "Waktu perangkat yang akan dikirim: {time}",
+        "en": "Device time that will be sent: {time}",
+    },
+    "save_timezone": {"id": "Simpan zona waktu", "en": "Save time zone"},
     "sync_rtc": {"id": "Sinkronkan RTC", "en": "Sync RTC"},
+    "servo_test": {"id": "Tes servo", "en": "Servo test"},
+    "servo_test_sub": {
+        "id": "Gerakkan gate ke 0° (tutup) atau 90° (buka).",
+        "en": "Move the gate to 0° (closed) or 90° (open).",
+    },
+    "servo_close": {"id": "Tutup · 0°", "en": "Close · 0°"},
+    "servo_open": {"id": "Buka · 90°", "en": "Open · 90°"},
     "command_activity": {"id": "Aktivitas perintah", "en": "Command activity"},
     "command_activity_sub": {
         "id": "Perintah MQTT terbaru dan status ACK.",
@@ -373,5 +397,9 @@ STRINGS: dict[str, dict[str, str]] = {
     "state_requested": {"id": "Permintaan status terkirim · {id}", "en": "State request sent · {id}"},
     "threshold_sent": {"id": "Ambang dikirim · {pct}%", "en": "Threshold sent · {pct}%"},
     "rtc_sent": {"id": "Perintah RTC terkirim · {id}", "en": "RTC command sent · {id}"},
+    "servo_test_sent": {
+        "id": "Perintah servo {deg}° terkirim · {id}",
+        "en": "Servo {deg}° command sent · {id}",
+    },
     "all_marked_read": {"id": "Semua notifikasi ditandai dibaca", "en": "All alerts marked as read"},
 }

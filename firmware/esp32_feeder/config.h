@@ -73,8 +73,8 @@
 // ===========================================================================
 // Hopper calibration — keep in sync with the devices table
 // ===========================================================================
-#define HOPPER_FULL_CM 5.0f
-#define HOPPER_EMPTY_CM 20.0f
+#define HOPPER_FULL_CM 3.0f
+#define HOPPER_EMPTY_CM 17.0f
 #define MAX_DISTANCE_CM 40.0f
 
 // ===========================================================================
@@ -86,6 +86,14 @@
 #define MQTT_RETRY_MS 5000UL
 #define DISPLAY_INTERVAL_MS 500UL
 #define DISPLAY_PAGE_MS 4000UL
+#define DISPLAY_TZ "WIB"
+
+// ===========================================================================
+// Time sync — SNTP on WiFi connect, DS3231 keeps local wall-clock as backup
+// ===========================================================================
+#define NTP_SERVER "pool.ntp.org"
+#define NTP_UTC_OFFSET_SEC (7 * 3600)  // WIB = UTC+7
+#define NTP_MIN_VALID_EPOCH 1600000000UL
 
 // ===========================================================================
 // Schedules

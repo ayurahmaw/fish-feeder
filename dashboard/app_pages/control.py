@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 
@@ -113,24 +114,48 @@ with row_two[1]:
         st.markdown("### :material/schedule:")
         st.subheader(t("device_clock"))
         st.caption(t("device_clock_sub"))
-        date_col, time_col = st.columns(2)
-        when = date_col.date_input(
-            t("date"), value=datetime.now().date(), key="rtc_date"
-        )
-        clock = time_col.time_input(
-            t("time_label"),
-            value=datetime.now().time().replace(microsecond=0),
-            key="rtc_time",
-        )
-        if st.button(
+
+        saved_tz = (device.get("timezone") or "Asia/Jakarta").strip() or "Asia/Jakarta"
+        tz_name = st.text_input(
+            t("timezone"),
+            value=saved_tz,
+            key=f"device_timezone_{device['id']}",
+            help=t("timezone_hint"),
+        ).strip()
+
+        try:
+            zone = ZoneInfo(tz_name)
+        except Exception:
+            zone = None
+
+        if zone is None:
+            st.error(t("timezone_invalid", tz=tz_name or "-"))
+        else:
+            local_now = datetime.now(timezone.utc).astimezone(zone)
+            st.caption(
+                t("device_time_preview", time=local_now.strftime("%Y-%m-%d %H:%M:%S"))
+            )
+
+        save_col, sync_col = st.columns(2)
+        if save_col.button(
+            t("save_timezone"),
+            icon=":material/save:",
+            disabled=zone is None,
+            key=f"save_timezone_{device['id']}",
+        ):
+            db.set_device_timezone(device["id"], tz_name)
+            data.clear_reads()
+            ui.toast_after_rerun(t("timezone_saved", tz=tz_name))
+            st.rerun()
+
+        if sync_col.button(
             t("sync_rtc"),
             icon=":material/schedule:",
-            disabled=not online,
-            key="sync_rtc",
+            disabled=not online or zone is None,
+            key=f"sync_rtc_{device['id']}",
         ):
-            payload = {
-                "datetime": datetime.combine(when, clock).strftime("%Y-%m-%dT%H:%M:%S")
-            }
+            db.set_device_timezone(device["id"], tz_name)
+            payload = {"datetime": local_now.strftime("%Y-%m-%dT%H:%M:%S")}
             try:
                 result = client_command(device, "set_rtc", payload)
             except Exception as exc:
@@ -138,6 +163,40 @@ with row_two[1]:
             else:
                 notify_command(result, "rtc_sent")
             st.rerun()
+
+with st.container(border=True):
+    st.markdown("### :material/precision_manufacturing:")
+    st.subheader(t("servo_test"))
+    st.caption(t("servo_test_sub"))
+    close_col, open_col = st.columns(2)
+
+    if close_col.button(
+        t("servo_close"),
+        icon=":material/lock:",
+        disabled=not online,
+        key="servo_test_0",
+    ):
+        try:
+            result = client_command(device, "servo_test", {"angle": 0})
+        except Exception as exc:
+            notify_failure(exc)
+        else:
+            notify_command(result, "servo_test_sent", deg=0)
+        st.rerun()
+
+    if open_col.button(
+        t("servo_open"),
+        icon=":material/lock_open:",
+        disabled=not online,
+        key="servo_test_90",
+    ):
+        try:
+            result = client_command(device, "servo_test", {"angle": 90})
+        except Exception as exc:
+            notify_failure(exc)
+        else:
+            notify_command(result, "servo_test_sent", deg=90)
+        st.rerun()
 
 with st.container(border=True):
     head_left, head_right = st.columns([3, 1], vertical_alignment="center")

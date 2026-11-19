@@ -2,6 +2,7 @@
 // Contract: CONTEXT.md §10 (topics, telemetry, command, ack).
 
 #include <ArduinoJson.h>
+#include <time.h>
 
 #include "config.h"
 #include "hw.h"
@@ -33,12 +34,17 @@ uint32_t lastSecondAt = 0;
 bool wasMqttConnected = false;
 bool wasWifiConnected = false;
 
+bool ntpRequested = false;
+bool ntpSynced = false;
+
 void onMqttMessage(const char *topic, const uint8_t *payload, unsigned int len);
 const char *stateString();
 void measureDistance();
 void publishTelemetry();
 bool feedStart(int portions, bool scheduled, const char *feedTime, const char *ackId);
 void feedTick();
+void ntpStart();
+void ntpTick();
 void handleCommand(const proto::Command &cmd);
 String stateSnapshotJson();
 
@@ -195,6 +201,29 @@ void commandTick() {
 }
 
 void handleCommand(const proto::Command &cmd) {
+  if (strcmp(cmd.type, "servo_test") == 0) {
+    if (cmd.angle != SERVO_CLOSED_DEG && cmd.angle != SERVO_OPEN_DEG) {
+      proto::ack(cmd.id, "error_bad_payload", "angle must be 0 or 90");
+      return;
+    }
+    if (phase != FEED_IDLE) {
+      proto::ack(cmd.id, "error_busy", "feeding in progress");
+      return;
+    }
+    if (!hw::servoReady()) {
+      proto::ack(cmd.id, "error_servo", "servo not attached");
+      return;
+    }
+    if (cmd.angle == SERVO_OPEN_DEG) {
+      hw::servoOpen();
+    } else {
+      hw::servoClose();
+    }
+    Serial.printf("[servo] test ke %d derajat\n", cmd.angle);
+    proto::ack(cmd.id, "ok", String("servo ") + cmd.angle + " deg");
+    return;
+  }
+
   if (strcmp(cmd.type, "manual_feed") == 0) {
     if (phase != FEED_IDLE) {
       proto::ack(cmd.id, "error_busy", "feeding in progress");
@@ -346,15 +375,53 @@ void displayTick() {
   lastDisplayAt = now;
 
   hw::DisplayData data;
-  data.state = stateString();
   data.distanceCm = distanceCm;
   data.feedPct = feedPct;
   data.wifiOk = net::wifiConnected();
   data.mqttOk = net::connected();
-  data.thresholdPct = proto::thresholdPct();
-  data.scheduleCount = proto::scheduleCount();
   data.clockValid = hw::clockValid();
   hw::displayTick(data, now);
+}
+
+void ntpStart() {
+  configTime(0, 0, NTP_SERVER);
+  ntpRequested = true;
+  ntpSynced = false;
+  Serial.printf("[ntp] meminta waktu dari %s (UTC%+d)\n", NTP_SERVER,
+                NTP_UTC_OFFSET_SEC / 3600);
+}
+
+void ntpTick() {
+  if (!ntpRequested || ntpSynced) {
+    return;
+  }
+  const time_t utc = time(nullptr);
+  if (utc < static_cast<time_t>(NTP_MIN_VALID_EPOCH)) {
+    return;
+  }
+
+  const time_t local = utc + NTP_UTC_OFFSET_SEC;
+  struct tm parts;
+  gmtime_r(&local, &parts);
+
+  const int y = parts.tm_year + 1900;
+  const int mo = parts.tm_mon + 1;
+  const int d = parts.tm_mday;
+  const int h = parts.tm_hour;
+  const int mi = parts.tm_min;
+  const int s = parts.tm_sec;
+
+  // DS3231 keeps local wall-clock time, same as the dashboard's set_rtc.
+  hw::clockSet(y, mo, d, h, mi, s);
+  ntpSynced = true;
+
+  char stamp[20];
+  snprintf(stamp, sizeof(stamp), "%04d-%02d-%02d %02d:%02d:%02d", y, mo, d, h, mi, s);
+  Serial.printf("[ntp] waktu tersinkron: %s %s -> RTC\n", stamp, DISPLAY_TZ);
+
+  char line[17];
+  snprintf(line, sizeof(line), "%02d:%02d:%02d", h, mi, s);
+  hw::displaySplashHold("NTP -> RTC", line, millis(), 4000);
 }
 
 }  // namespace
@@ -365,9 +432,16 @@ void setup() {
   Serial.printf("\n[feeder] fw %s\n", FW_VERSION);
 
   hw::begin();
+  if (hw::clockValid()) {
+    Serial.printf("[rtc] waktu boot dari RTC: %s\n", hw::clockIso().c_str());
+  } else {
+    Serial.println("[rtc] jam belum valid — menunggu NTP");
+  }
   proto::begin();
   net::begin(onMqttMessage);
-  hw::displaySplash(net::deviceId().c_str(), "starting...");
+  hw::displaySplashHold(net::deviceId().c_str(),
+                        hw::clockValid() ? hw::clockTime().c_str() : "starting...",
+                        millis(), 3000);
   measureDistance();
 }
 
@@ -382,10 +456,12 @@ void loop() {
 
   if (net::wifiConnected() && !wasWifiConnected) {
     Serial.printf("[wifi] terhubung, rssi %d dBm\n", net::rssi());
+    ntpStart();
   }
   wasWifiConnected = net::wifiConnected();
 
   commandTick();
+  ntpTick();
   feedTick();
   sensorTick();
   scheduleTick();

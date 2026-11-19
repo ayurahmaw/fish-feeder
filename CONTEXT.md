@@ -148,7 +148,7 @@ Web Dashboard dibagi menjadi beberapa tab/halaman utama:
 | Alerts | feed_low · feed_empty · feed_failed · device_offline · tandai dibaca | FR-07 |
 | History | Riwayat pakan 1/7/30 hari · level sebelum/sesudah · ringkasan sukses/gagal | FR-08 |
 | Schedules | Lihat/tambah jadwal · aktif–nonaktif · kirim `set_schedule` | FR-05 |
-| Control | `manual_feed` · `get_state` · `set_threshold` · `set_rtc` | FR-03/04/06 |
+| Control | `manual_feed` · `get_state` · `set_threshold` · `set_rtc` · `servo_test` | FR-03/04/06 |
 
 ---
 
@@ -312,6 +312,7 @@ Aplikasi juga menerima format lama `{ "level": 50 }` (Node-RED) — kompatibel.
 | `type` | `payload` | Aksi device |
 |---|---|---|
 | `manual_feed` | `{ "portions": 2 }` | Jalankan servo × porsi, lalu ACK |
+| `servo_test` | `{ "angle": 90 }` | Posisikan gate ke `angle` (`0` atau `90` saja), lalu ACK — khusus uji wiring/kinerja servo, tidak butuh level pakan |
 | `set_schedule` | `{ "schedules": [ { "id": 1, "feed_time": "07:00:00", "portions": 2 } ] }` | Simpan ke NVS/RTC, ACK |
 | `set_threshold` | `{ "threshold_pct": 25 }` | Simpan, ACK |
 | `set_rtc` | `{ "datetime": "2026-09-23T13:00:00" }` | Set RTC internal, ACK |

@@ -11,6 +11,7 @@ Contoh:
     pipenv run python cli.py manual_feed feeder01 '{"portions":2}'
     pipenv run python cli.py get_state feeder01
     pipenv run python cli.py set_threshold feeder01 '{"threshold_pct":25}'
+    pipenv run python cli.py servo_test feeder01 '{"angle":90}'
 
 Catatan: aplikasi Streamlit harus sedang berjalan — dialah yang menjalankan
 broker MQTT dan memproses ack.
@@ -41,6 +42,14 @@ def main(argv) -> int:
         except json.JSONDecodeError:
             print("payload bukan JSON valid, contoh: '{\"portions\":2}'", file=sys.stderr)
             return 1
+    if not isinstance(payload, dict):
+        print("payload harus berupa objek JSON", file=sys.stderr)
+        return 1
+    if type_ == "servo_test" and payload.get("angle") not in (0, 90):
+        print(
+            'servo_test butuh payload {"angle":0} atau {"angle":90}', file=sys.stderr
+        )
+        return 1
 
     db.init_db()
 

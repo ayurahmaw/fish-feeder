@@ -9,6 +9,7 @@ struct Command {
   char type[24];
   int portions;
   int thresholdPct;
+  int angle;
   char datetime[24];
   char schedulesJson[512];
 };

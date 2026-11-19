@@ -110,7 +110,54 @@ def init_db() -> None:
         if exists is None:
             schema = Path(config.SCHEMA_PATH).read_text(encoding="utf-8")
             conn.executescript(schema)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(devices)")}
+        if "timezone" not in columns:
+            conn.execute(
+                "ALTER TABLE devices "
+                "ADD COLUMN timezone TEXT NOT NULL DEFAULT 'Asia/Jakarta'"
+            )
+        _migrate_command_types(conn)
         _initialized = True
+
+
+def _migrate_command_types(conn) -> None:
+    """Rebuild `commands` when its type CHECK predates `servo_test`."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'commands'"
+    ).fetchone()
+    if row is None or "servo_test" in (row["sql"] or ""):
+        return
+    conn.executescript(
+        """
+        BEGIN IMMEDIATE;
+        ALTER TABLE commands RENAME TO commands_old;
+        CREATE TABLE commands (
+          id             INTEGER PRIMARY KEY AUTOINCREMENT,
+          command_id     TEXT    NOT NULL UNIQUE,
+          device_id      INTEGER NOT NULL REFERENCES devices (id) ON DELETE CASCADE,
+          type           TEXT    NOT NULL
+                         CHECK (type IN ('manual_feed', 'set_schedule',
+                                         'set_threshold', 'set_rtc', 'get_state',
+                                         'servo_test')),
+          payload        TEXT    NOT NULL CHECK (json_valid(payload)),
+          status         TEXT    NOT NULL DEFAULT 'pending'
+                         CHECK (status IN ('pending', 'sent', 'success', 'failed',
+                                           'timeout')),
+          result_message TEXT,
+          created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+          acked_at       TEXT
+        );
+        INSERT INTO commands (id, command_id, device_id, type, payload, status,
+                              result_message, created_at, acked_at)
+          SELECT id, command_id, device_id, type, payload, status,
+                 result_message, created_at, acked_at
+          FROM commands_old;
+        DROP TABLE commands_old;
+        CREATE INDEX IF NOT EXISTS idx_commands_device_time
+          ON commands (device_id, created_at);
+        COMMIT;
+        """
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +167,8 @@ def init_db() -> None:
 
 def find_device_by_code(device_code: str):
     row = connection().execute(
-        "SELECT id, device_code, sensor_full_cm, sensor_empty_cm, low_feed_threshold_pct "
+        "SELECT id, device_code, sensor_full_cm, sensor_empty_cm, "
+        "low_feed_threshold_pct, timezone "
         "FROM devices WHERE device_code = ?",
         (device_code,),
     ).fetchone()
@@ -174,7 +222,7 @@ def mark_stale_devices_offline(timeout_sec) -> list[str]:
 
 def list_devices():
     rows = connection().execute(
-        "SELECT id, device_code, name, location, is_online, "
+        "SELECT id, device_code, name, location, timezone, is_online, "
         "sensor_full_cm, sensor_empty_cm, low_feed_threshold_pct "
         "FROM devices ORDER BY device_code"
     ).fetchall()
@@ -186,6 +234,14 @@ def set_low_feed_threshold(device_id: int, threshold_pct: int) -> None:
     connection().execute(
         f"UPDATE devices SET low_feed_threshold_pct = ?, updated_at = {NOW} WHERE id = ?",
         (int(threshold_pct), device_id),
+    )
+
+
+def set_device_timezone(device_id: int, tz: str) -> None:
+    """IANA zone name used to turn UTC into the device's local wall clock."""
+    connection().execute(
+        f"UPDATE devices SET timezone = ?, updated_at = {NOW} WHERE id = ?",
+        (tz, device_id),
     )
 
 
