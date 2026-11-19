@@ -69,8 +69,14 @@ assets/diagrams/svg/*.svg   hasil render          (di-commit, copy-paste-able)
 assets/diagrams/pdf/*.pdf   hasil render          (di-commit, dipakai LaTeX)
 assets/tikz/*.tex           sumber TikZ           (di-commit)
 assets/tikz/pdf/*.pdf       hasil compile         (di-commit, copy-paste-able + dipakai LaTeX)
-assets/tikz/build/*.pdf     intermediates latexmk (gitignored, dibuat oleh build)
+assets/tikz/png/*.png       pratinjau 1600 px     (di-commit, terlihat saat buka repo)
 ```
+
+Tidak ada folder build di dalam repo. Setiap `assets/tikz/*.tex` dikompilasi di
+direktori sementara di luar repo, lalu **hanya PDF-nya** yang dipindahkan ke
+`assets/tikz/pdf/`. Karena itu tidak ada aset yang perlu di-ignore: semua isi
+`assets/**` di-commit, dan `.gitignore` hanya menyisakan auxiliary LaTeX
+(`*.aux`, `*.log`, `*.fls`, PDF hasil build di root `docs/design-report/`).
 
 Kedua jenis aset punya bentuk yang sama: sumber editable di satu tempat, hasil render
 yang bisa langsung dipakai di tempat lain. Jangan mengedit SVG/PDF hasil render — akan

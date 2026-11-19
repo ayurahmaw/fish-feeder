@@ -124,6 +124,55 @@ timeline, risks, and operational commands.
 | **`CONTEXT.md`** | The complete PRD (requirements + design + flows + ops) |
 | `dashboard/README.md` | How the app is put together and how to run it |
 | `database/schema.sql` · `database/example_queries.sql` | Executable schema + example queries |
+| **`docs/design-report/`** | The full design document (LaTeX → PDF) and all diagram assets |
+
+### Design report — `docs/design-report/`
+
+A standalone design document for the whole system: hardware, firmware, MQTT contract,
+database and dashboard, with 22 figures and 26 tables. Indonesian prose, English
+diagram labels. Built from source, not exported from a word processor.
+
+```
+docs/design-report/
+├── out/laporan-desain-sistem.pdf     ← read this (59 pp, cover + TOC)
+├── out/lampiran-desain-sistem.pdf    ← appendix mode (55 pp, figures A.1, B.1, …)
+├── main-standalone.tex               ← entry point: full document
+├── main-appendix.tex                 ← entry point: appendix numbering, no cover
+├── report-body.tex                   ← shared body, used by both entry points
+├── preamble/{packages,colors,facts,macros}.tex
+├── chapters/01-pendahuluan … 09-catatan-asumsi.tex
+├── assets/diagrams/src/*.mmd         ← Mermaid sources (flowcharts, sequences, ER)
+├── assets/diagrams/svg/*.svg         ← rendered, drag into Word/Slides/Docs
+├── assets/diagrams/pdf/*.pdf         ← rendered, what LaTeX includes
+├── assets/tikz/*.tex                 ← TikZ/Circuitikz sources
+├── assets/tikz/pdf/*.pdf             ← rendered, drag into Word/Slides/Docs
+├── assets/tikz/png/*.png             ← 1600 px previews
+├── bin/{bootstrap-tools,render-diagrams,build,verify-facts}.sh
+├── Makefile · BUILD_NOTES.md · FACTS.md
+```
+
+Every diagram is editable at its source (`.mmd` or `.tex`) and every rendered asset is
+committed — no build folder to reproduce before you can see a picture.
+
+| Figure | Where |
+|---|---|
+| Hardware block diagram, schematic/wiring, pin assignment | `assets/tikz/` (Bab 3) |
+| Firmware: complete flow, gate state machine, timing, MQTT lifecycle, scheduled feed | `assets/tikz/fw-flow-overview.tex` + `assets/diagrams/src/fw-*` (Bab 4) |
+| Website: page flow, bootstrap, command lifecycle, 6 sequences, broker choice | `assets/diagrams/src/web-*` (Bab 5) |
+| Database: ER diagram + relational schema with PK/FK | `assets/diagrams/src/db-er.mmd` + `assets/tikz/db-relational-schema.tex` (Bab 7) |
+| End-to-end: topology and full sequence | `assets/diagrams/src/e2e-*` (Bab 2, 8) |
+
+Rebuild it:
+
+```bash
+cd docs/design-report
+make tools      # once: TinyTeX (user-level, no sudo) + mermaid-cli
+make            # render diagrams → build both PDFs → verify facts
+```
+
+`make` needs network only for the one-time `make tools`. `bin/verify-facts.sh` fails the
+build when a pin, timing or calibration value in the document drifts from
+`firmware/esp32_feeder/config.h`, so the text cannot silently disagree with the code.
 
 The former docs (`STARTUP_GUIDE.md`, `DEVICE_PROTOCOL.md`, `DATABASE_PLAN.md`, `CHEATSHEET.md`,
 `MQTT_FOUNDATION_PLAN.md`, `dashboard/*FLOWCHART*.md`) are archived stubs pointing into `CONTEXT.md`.

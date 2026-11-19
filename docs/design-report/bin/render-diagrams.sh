@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 MERMAID_CFG="assets/diagrams/mermaid-config.json"
 PUPPETEER_CFG="assets/diagrams/puppeteer-config.json"
 
-mkdir -p assets/diagrams/svg assets/diagrams/pdf assets/diagrams/png assets/tikz/build assets/tikz/pdf assets/tikz/png
+mkdir -p assets/diagrams/svg assets/diagrams/pdf assets/diagrams/png assets/tikz/pdf assets/tikz/png
 
 command -v mmdc >/dev/null 2>&1 || { echo "mmdc tidak ada — jalankan bin/bootstrap-tools.sh" >&2; exit 1; }
 command -v pdflatex >/dev/null 2>&1 || { echo "pdflatex tidak ada — jalankan bin/bootstrap-tools.sh" >&2; exit 1; }
@@ -62,20 +62,25 @@ render_tikz() {
   local src="$1"
   local base
   base="$(basename "$src" .tex)"
-  local built="assets/tikz/build/$base.pdf"
   local out="assets/tikz/pdf/$base.pdf"
 
   printf '  tikz     %-34s' "$base"
-  rm -f "$built" "$out"
+  rm -f "$out"
+
+  # Compile outside the repository so no build directory is left behind:
+  # only the finished PDF is moved into assets/tikz/pdf/.
+  local aux
+  aux="$(mktemp -d "${TMPDIR:-/tmp}/tikz-$base.XXXXXX")"
   if ! latexmk -pdf -interaction=nonstopmode -halt-on-error \
-        -outdir=assets/tikz/build "$src" >"/tmp/tikz-$base.log" 2>&1; then
+        -outdir="$aux" "$src" >"/tmp/tikz-$base.log" 2>&1; then
     printf 'GAGAL\n'
     grep -nE '^!|^l\.[0-9]+' "/tmp/tikz-$base.log" | head -12 | sed 's/^/           /'
+    rm -rf "$aux"
     return 1
   fi
-  # build/ holds the latexmk intermediates (gitignored); pdf/ holds the asset
-  # that LaTeX includes and that can be copied into Word/Slides.
-  cp "$built" "$out"
+  mv "$aux/$base.pdf" "$out"
+  rm -rf "$aux"
+
   # PNG preview so the figure is visible when browsing the repo.
   qlmanage -t -s 1600 -o assets/tikz/png "$out" >/dev/null 2>&1 || true
   if [ -f "assets/tikz/png/$base.pdf.png" ]; then

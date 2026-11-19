@@ -86,9 +86,8 @@ __pycache__/
 *.db-wal
 *.db-shm
 
-# Design report build artefacts
-docs/design-report/assets/tikz/build/
-docs/design-report/assets/diagrams/png/
+# Design report: LaTeX auxiliaries only. Every diagram asset
+# (assets/**/pdf, assets/**/svg, assets/**/png) is committed on purpose.
 docs/design-report/main-standalone.pdf
 docs/design-report/main-appendix.pdf
 docs/design-report/*.aux

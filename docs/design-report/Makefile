@@ -31,6 +31,5 @@ verify:
 
 clean:
 	latexmk -C main-standalone.tex main-appendix.tex >/dev/null 2>&1 || true
-	rm -rf assets/tikz/build assets/diagrams/png
-	find . -maxdepth 2 -name '*.aux' -o -name '*.log' -o -name '*.out' -o -name '*.toc' \
-		-o -name '*.fls' -o -name '*.fdb_latexmk' -o -name '*.synctex.gz' | xargs -r rm -f
+	find . -maxdepth 2 \( -name '*.aux' -o -name '*.log' -o -name '*.out' -o -name '*.toc' \
+		-o -name '*.fls' -o -name '*.fdb_latexmk' -o -name '*.synctex.gz' \) | xargs -r rm -f
